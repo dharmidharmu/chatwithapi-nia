@@ -1,5 +1,5 @@
-python -m venv customgptapp
-source customgptapp/bin/activate
+python -m venv customgptapp2
+source customgptapp2/bin/activate
 python -m pip install --upgrade pip
 echo "Installing Requirements"
 pip install -r requirements.txt
