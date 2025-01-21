@@ -80,9 +80,19 @@ origins = [
             "http://localhost:3000", 
             "http://localhost:5173", 
             "http://127.0.0.1:5173", 
+            "http://localhost:5174", 
+            "http://127.0.0.1:5174",
             "https://login.microsoftonline.com",
             "https://customgptapp.azurewebsites.net", 
-            "https://customgptapp.azurewebsites.net:443"
+            "https://customgptapp.azurewebsites.net:443",
+            "https://customgptapp2.azurewebsites.net", 
+            "https://customgptapp2.azurewebsites.net:443",
+            "https://niaapp.azurewebsites.net",
+            "https://niaapp.azurewebsites.net:443"
+            "https://niaapp2.azurewebsites.net",
+            "https://niaapp2.azurewebsites.net:443"
+            "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net",
+            "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net:443"
           ]
 
 middleware = [
