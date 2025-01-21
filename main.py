@@ -85,6 +85,8 @@ origins = [
             "https://login.microsoftonline.com",
             "https://customgptapp.azurewebsites.net", 
             "https://customgptapp.azurewebsites.net:443",
+            "https://customgptapp2.azurewebsites.net", 
+            "https://customgptapp2.azurewebsites.net:443",
             "https://niaapp.azurewebsites.net",
             "https://niaapp.azurewebsites.net:443"
             "https://niaapp2.azurewebsites.net",
