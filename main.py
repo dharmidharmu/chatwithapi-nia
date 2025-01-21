@@ -87,6 +87,8 @@ origins = [
             "https://customgptapp.azurewebsites.net:443",
             "https://niaapp.azurewebsites.net",
             "https://niaapp.azurewebsites.net:443"
+            "https://niaapp2.azurewebsites.net",
+            "https://niaapp2.azurewebsites.net:443"
             "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net",
             "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net:443"
           ]
@@ -142,68 +144,68 @@ msal_app = msal.ConfidentialClientApplication(
 #  with open("token_cache.bin", "wb") as f:
 #      pickle.dump(msal_app.token_cache, f)
 
-@app.middleware("http")
-async def ensure_https_session_cookie(request: Request, call_next):
-    response = await call_next(request)
-    if request.url.scheme == "https":  
-        if "session" in response.cookies:
-            response.set_cookie(
-                "session",
-                response.cookies["session"],
-                secure=True,  # Important!
-                httponly=True,  # Important!
-                samesite="lax",
-                path="/",
-            )
-    return response
+# @app.middleware("http")
+# async def ensure_https_session_cookie(request: Request, call_next):
+#     response = await call_next(request)
+#     if request.url.scheme == "https":  
+#         if "session" in response.cookies:
+#             response.set_cookie(
+#                 "session",
+#                 response.cookies["session"],
+#                 secure=True,  # Important!
+#                 httponly=True,  # Important!
+#                 samesite="lax",
+#                 path="/",
+#             )
+#     return response
 
 # --- Authentication Routes ---
-@app.get("/login")
-async def login(request: Request):
-    redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
-    auth_url = msal_app.get_authorization_request_url(
-        CONFIG["SCOPE"],
-        #redirect_uri=request.url_for("getAToken"),  # FastAPI's url_for
-        redirect_uri=redirect_uri,
-        prompt="select_account",  # Force user to select account on each login (optional)
-    )
-    logger.info(f"Redirecting to: {auth_url}")
-    return RedirectResponse(auth_url)
+# @app.get("/login")
+# async def login(request: Request):
+#     redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
+#     auth_url = msal_app.get_authorization_request_url(
+#         CONFIG["SCOPE"],
+#         #redirect_uri=request.url_for("getAToken"),  # FastAPI's url_for
+#         redirect_uri=redirect_uri,
+#         prompt="select_account",  # Force user to select account on each login (optional)
+#     )
+#     logger.info(f"Redirecting to: {auth_url}")
+#     return RedirectResponse(auth_url)
 
-@app.get("/getAToken", name="getAToken")
-async def auth_response(request: Request):
- redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
- try:
-     cache = msal.SerializableTokenCache()
-     result = msal_app.acquire_token_by_authorization_code(
-         request.query_params["code"],
-         scopes=CONFIG["SCOPE"],
-         redirect_uri=redirect_uri
-         #redirect_uri=request.url_for("getAToken") # Ensure redirect_uri matches the original request
-     )
+# @app.get("/getAToken", name="getAToken")
+# async def auth_response(request: Request):
+#  redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
+#  try:
+#      cache = msal.SerializableTokenCache()
+#      result = msal_app.acquire_token_by_authorization_code(
+#          request.query_params["code"],
+#          scopes=CONFIG["SCOPE"],
+#          redirect_uri=redirect_uri
+#          #redirect_uri=request.url_for("getAToken") # Ensure redirect_uri matches the original request
+#      )
 
-     if "error" in result:
-         logger.error("Authentication error: " + result.get("error"))
-         return templates.TemplateResponse("auth_error.html", {"request": request, "result": result})
+#      if "error" in result:
+#          logger.error("Authentication error: " + result.get("error"))
+#          return templates.TemplateResponse("auth_error.html", {"request": request, "result": result})
 
-     logger.info(f"Session ID after login: {request.session.get('session_cookie')}")
-     request.session["user"] = result.get("id_token_claims")
+#      logger.info(f"Session ID after login: {request.session.get('session_cookie')}")
+#      request.session["user"] = result.get("id_token_claims")
 
-     if cache.has_state_changed:
-         msal_app.token_cache = cache
+#      if cache.has_state_changed:
+#          msal_app.token_cache = cache
 
-     return RedirectResponse(url=f"https://{request.url.hostname}/")  # Redirect to index page after login
- except Exception as e: # Handle exceptions
-     logging.exception("Error in auth_response:" + str(e)) # Log the exception
-     return templates.TemplateResponse("auth_error.html", {"request": request, "result": {"error": str(e)}}) # Show a general error
+#      return RedirectResponse(url=f"https://{request.url.hostname}/")  # Redirect to index page after login
+#  except Exception as e: # Handle exceptions
+#      logging.exception("Error in auth_response:" + str(e)) # Log the exception
+#      return templates.TemplateResponse("auth_error.html", {"request": request, "result": {"error": str(e)}}) # Show a general error
 
-# --- Logout Route ---
+# # --- Logout Route ---
 
-@app.get("/logout")
-async def logout(request: Request):
-    request.session.pop("user", None)  # Clear user from session
-    request.session.clear()  # Clear the session
-    return RedirectResponse(url=f"https://{request.url.hostname}/login")
+# @app.get("/logout")
+# async def logout(request: Request):
+#     request.session.pop("user", None)  # Clear user from session
+#     request.session.clear()  # Clear the session
+#     return RedirectResponse(url=f"https://{request.url.hostname}/login")
 
 # Conversation History
 conversations = []
@@ -216,7 +218,7 @@ max_conversations_to_consider = 10
 #http://localhost:8000/maf/{ticket_id}
 # @app.get("/maf/{ticketNumber}", response_class=HTMLResponse)
 # async def maf_index(request: Request, ticketNumber: str):
-#     user = request.session.get("user")
+#     user = getSessionUser(request)
 #     if user:
 #         model_output = run_conversation(ticketNumber)
 
@@ -252,10 +254,14 @@ max_conversations_to_consider = 10
     
 #     return response
 
+def getSessionUser(request:Request):
+    #return request.session.get("user")
+    return "Dharmeshwaran S"
+
 #http://localhost:8000/maf/?TID=ticket_id
 @app.get("/maf/", response_class=HTMLResponse)
 async def maf_index_1(request: Request, TID: str):
-    user = request.session.get("user")
+    user = getSessionUser(request)
     if user:
         #model_output = run_conversation(TID)
         model_output = call_maf(TID)
@@ -295,7 +301,7 @@ async def maf_index_1(request: Request, TID: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    user = request.session.get("user")
+    user = getSessionUser(request)
     if user:
         response = templates.TemplateResponse("index.html", {
             "request": request, 
@@ -357,7 +363,7 @@ async def create_gpt(request: Request, loggedUser: str = Cookie(None), gpt: str 
 async def get_gpts(request: Request):
     gpts = []
     loggedUser = getUserName(request, "get_gpts")
-    logger.info(f"User: {json.dumps(request.session.get('user'))}")
+    #logger.info(f"User: {json.dumps(request.session.get('user'))}")
 
     if loggedUser != None and loggedUser != "N/A":
         gpts = list(gpts_collection.find({'user': loggedUser}))  # Get all GPTs from MongoDB
@@ -678,16 +684,16 @@ def getDeployments():
     return deployed_model_names
 
 # MSAL Authentication: Acquire token for Azure Management API
-def get_access_token(msal_app):
-    # Acquire token for Azure Management API (scopes)
-    result = msal_app.acquire_token_for_client(scopes=["https://management.azure.com/.default"])
+# def get_access_token(msal_app):
+#     # Acquire token for Azure Management API (scopes)
+#     result = msal_app.acquire_token_for_client(scopes=["https://management.azure.com/.default"])
     
-    if "access_token" in result:
-        logger.info("Successfully acquired access token.")
-        return result["access_token"]
-    else:
-        logger.error("Failed to acquire access token.")
-        raise Exception("Authentication failed: " + result.get("error_description", "Unknown error"))
+#     if "access_token" in result:
+#         logger.info("Successfully acquired access token.")
+#         return result["access_token"]
+#     else:
+#         logger.error("Failed to acquire access token.")
+#         raise Exception("Authentication failed: " + result.get("error_description", "Unknown error"))
 
 def getDeployments2():
     deployed_model_names = []
@@ -728,28 +734,28 @@ def getDeployments2():
 
     return deployed_model_names
 
-def print_session_values(request: Request, callee: str):
-    session = request.session
+# def print_session_values(request: Request, callee: str):
+#     session = request.session
     
-    logger.info(f"Calling Method : {callee}. Session Information:\n")
-    for key, value in session.items():
-        logger.info(f"{key}: {value}\n")
+#     logger.info(f"Calling Method : {callee}. Session Information:\n")
+#     for key, value in session.items():
+#         logger.info(f"{key}: {value}\n")
 
-    session = request.session.get("session")
-    logger.info("session_cookie Information:\n")
-    if session != None:
-        for key, value in session.items():
-            logger.info(f"{key}: {value}\n")
+#     session = request.session.get("session")
+#     logger.info("session_cookie Information:\n")
+#     if session != None:
+#         for key, value in session.items():
+#             logger.info(f"{key}: {value}\n")
 
-    session = request.session.get("_session")
-    logger.info("_session Information:\n")
-    if session != None:
-        for key, value in session.items():
-            logger.info(f"{key}: {value}\n")
+#     session = request.session.get("_session")
+#     logger.info("_session Information:\n")
+#     if session != None:
+#         for key, value in session.items():
+#             logger.info(f"{key}: {value}\n")
 
 def getUserName(request: Request, callee: str):
     # loggedUser = "N/A"
-    # user = request.session.get("user")
+    # user = getSessionUser(request)
 
     # if user is None:
     #     loggedUser = request.cookies.get("loggedUser")
