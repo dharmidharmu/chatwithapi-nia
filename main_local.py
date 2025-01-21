@@ -97,13 +97,13 @@ origins = [
 
 middleware = [
  #Middleware(HTTPSRedirectMiddleware),
- Middleware(
-     SessionMiddleware, 
-     secret_key=CONFIG["SESSION_SECRET_KEY"], 
-     same_site="lax",  # Important for cross-site requests
-     https_only=True, # Important for security - only set cookies over HTTPS
-     max_age=1*24*60*60  # 1 day session expiry
- ),
+#  Middleware(
+#      SessionMiddleware, 
+#      secret_key=CONFIG["SESSION_SECRET_KEY"], 
+#      same_site="lax",  # Important for cross-site requests
+#      https_only=True, # Important for security - only set cookies over HTTPS
+#      max_age=1*24*60*60  # 1 day session expiry
+#  ),
  Middleware(
      CORSMiddleware, 
      allow_origins=origins, 
@@ -126,93 +126,93 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- MSAL Setup ---
-msal_app = msal.ConfidentialClientApplication(
-    CONFIG["CLIENT_ID"],
-    client_credential=CONFIG["CLIENT_SECRET"],
-    authority=CONFIG["AUTHORITY"],
-    token_cache=msal.SerializableTokenCache() # Initialize token_cache
-)
+# msal_app = msal.ConfidentialClientApplication(
+#     CONFIG["CLIENT_ID"],
+#     client_credential=CONFIG["CLIENT_SECRET"],
+#     authority=CONFIG["AUTHORITY"],
+#     token_cache=msal.SerializableTokenCache() # Initialize token_cache
+# )
 
 # --- Startup and Shutdown Handlers (For Token Cache Persistence) ---
-@app.on_event("startup")
-async def startup_event():
- try:
-     with open("token_cache.bin", "rb") as f:
-         cache = pickle.load(f)
- except (FileNotFoundError, EOFError): # Handle empty file
-     cache = msal.SerializableTokenCache()
+# @app.on_event("startup")
+# async def startup_event():
+#  try:
+#      with open("token_cache.bin", "rb") as f:
+#          cache = pickle.load(f)
+#  except (FileNotFoundError, EOFError): # Handle empty file
+#      cache = msal.SerializableTokenCache()
 
- msal_app.token_cache = cache
+#  msal_app.token_cache = cache
 
-@app.on_event("shutdown")
-async def shutdown_event():
- with open("token_cache.bin", "wb") as f:
-     pickle.dump(msal_app.token_cache, f)
+# @app.on_event("shutdown")
+# async def shutdown_event():
+#  with open("token_cache.bin", "wb") as f:
+#      pickle.dump(msal_app.token_cache, f)
 
-@app.middleware("http")
-async def ensure_https_session_cookie(request: Request, call_next):
-    response = await call_next(request)
-    if request.url.scheme == "https":  
-        if "session" in response.cookies:
-            response.set_cookie(
-                "session",
-                response.cookies["session"],
-                secure=True,  # Important!
-                httponly=True,  # Important!
-                samesite="lax",
-                path="/",
-            )
-    return response
+# @app.middleware("http")
+# async def ensure_https_session_cookie(request: Request, call_next):
+#     response = await call_next(request)
+#     if request.url.scheme == "https":  
+#         if "session" in response.cookies:
+#             response.set_cookie(
+#                 "session",
+#                 response.cookies["session"],
+#                 secure=True,  # Important!
+#                 httponly=True,  # Important!
+#                 samesite="lax",
+#                 path="/",
+#             )
+#     return response
 
-# --- Authentication Routes ---
-@app.get("/login")
-async def login(request: Request):
-    logger.info(f"Request URL {request.url}")
-    redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
-    auth_url = msal_app.get_authorization_request_url(
-        CONFIG["SCOPE"],
-        redirect_uri=request.url_for("getAToken"),  # FastAPI's url_for
-        #redirect_uri=redirect_uri,
-        prompt="select_account",  # Force user to select account on each login (optional)
-    )
-    logger.info(f"Redirecting to: {auth_url}")
-    return RedirectResponse(auth_url)
+# # --- Authentication Routes ---
+# @app.get("/login")
+# async def login(request: Request):
+#     logger.info(f"Request URL {request.url}")
+#     redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
+#     auth_url = msal_app.get_authorization_request_url(
+#         CONFIG["SCOPE"],
+#         redirect_uri=request.url_for("getAToken"),  # FastAPI's url_for
+#         #redirect_uri=redirect_uri,
+#         prompt="select_account",  # Force user to select account on each login (optional)
+#     )
+#     logger.info(f"Redirecting to: {auth_url}")
+#     return RedirectResponse(auth_url)
 
-@app.get("/getAToken", name="getAToken")
-async def auth_response(request: Request):
- redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
- try:
-     cache = msal.SerializableTokenCache()
-     result = msal_app.acquire_token_by_authorization_code(
-         request.query_params["code"],
-         scopes=CONFIG["SCOPE"],
-         #redirect_uri=redirect_uri
-         redirect_uri=request.url_for("getAToken") # Ensure redirect_uri matches the original request
-     )
+# @app.get("/getAToken", name="getAToken")
+# async def auth_response(request: Request):
+#  redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
+#  try:
+#      cache = msal.SerializableTokenCache()
+#      result = msal_app.acquire_token_by_authorization_code(
+#          request.query_params["code"],
+#          scopes=CONFIG["SCOPE"],
+#          #redirect_uri=redirect_uri
+#          redirect_uri=request.url_for("getAToken") # Ensure redirect_uri matches the original request
+#      )
 
-     if "error" in result:
-         logger.error("Authentication error: " + result.get("error"))
-         return templates.TemplateResponse("auth_error.html", {"request": request, "result": result})
+#      if "error" in result:
+#          logger.error("Authentication error: " + result.get("error"))
+#          return templates.TemplateResponse("auth_error.html", {"request": request, "result": result})
 
-     logger.info(f"Session ID after login: {request.session.get('session_cookie')}")
-     request.session["user"] = result.get("id_token_claims")
+#      logger.info(f"Session ID after login: {request.session.get('session_cookie')}")
+#      request.session["user"] = result.get("id_token_claims")
 
-     if cache.has_state_changed:
-         msal_app.token_cache = cache
+#      if cache.has_state_changed:
+#          msal_app.token_cache = cache
 
-     #return RedirectResponse(url=f"https://{request.url.hostname}/")  # Redirect to index page after login
-     return RedirectResponse(url="/")
- except Exception as e: # Handle exceptions
-     logging.exception("Error in auth_response:" + str(e)) # Log the exception
-     return templates.TemplateResponse("auth_error.html", {"request": request, "result": {"error": str(e)}}) # Show a general error
+#      #return RedirectResponse(url=f"https://{request.url.hostname}/")  # Redirect to index page after login
+#      return RedirectResponse(url="/")
+#  except Exception as e: # Handle exceptions
+#      logging.exception("Error in auth_response:" + str(e)) # Log the exception
+#      return templates.TemplateResponse("auth_error.html", {"request": request, "result": {"error": str(e)}}) # Show a general error
 
-# --- Logout Route ---
-@app.get("/logout")
-async def logout(request: Request):
-    request.session.pop("user", None)  # Clear user from session
-    request.session.clear()  # Clear the session
-    #return RedirectResponse(url=f"https://{request.url.hostname}/login")
-    return RedirectResponse(url=f"/login")
+# # --- Logout Route ---
+# @app.get("/logout")
+# async def logout(request: Request):
+#     request.session.pop("user", None)  # Clear user from session
+#     request.session.clear()  # Clear the session
+#     #return RedirectResponse(url=f"https://{request.url.hostname}/login")
+#     return RedirectResponse(url=f"/login")
 
 # Conversation History
 conversations = []
@@ -225,7 +225,7 @@ max_conversations_to_consider = 10
 #http://localhost:8000/maf/ticket_id
 # @app.get("/maf/{ticketNumber}", response_class=HTMLResponse)
 # async def maf_index(request: Request, ticketNumber: str):
-#     user = request.session.get("user")
+#     user = getSessionUser(request)
 #     if user:
 #         model_output = run_conversation(ticketNumber)
 
@@ -261,10 +261,14 @@ max_conversations_to_consider = 10
     
 #     return response
 
+def getSessionUser(request:Request):
+    #return getSessionUser(request)
+    return "Dharmeshwaran S"
+
 #http://localhost:8000/maf/?TID=ticket_id
 @app.get("/maf/", response_class=HTMLResponse)
 async def maf_index_1(request: Request, TID: str):
-    user = request.session.get("user")
+    user = getSessionUser(request)
     if user:
         model_output = call_maf(TID)
 
@@ -302,7 +306,7 @@ async def maf_index_1(request: Request, TID: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    user = request.session.get("user")
+    user = getSessionUser(request)
 
     # userJson = """{'aud': '9a0a7f7d-3621-456f-b030-79755e196c11', 'iss': 'https://login.microsoftonline.com/6e50f04c-22d7-4b8e-8fa2-08f577dfa5aa/v2.0', 'iat': 1736840089, 'nbf': 1736840089, 'exp': 1736843989, 'aio': 'AYQAe/8ZAAAAHlh6j2rWIcLG6U6X6x56nM1gTflFuALNfvhnNP1uZuiXGQ3VSWrk/4EDlGDNuYY7LTx9BGA2n7u4oJLQVSXqiHg9eAwlQE2k5b1EppY6XrSmqMGcMYiC+zskLO3jqKwPw9Ykq9TPKmZs7+dIhgE0lfdL+Jo1kKbPDr/57XUvJig=', 'idp': 'https://sts.windows.net/9188040d-6c67-4c5b-b112-36a304b66dad/', 'name': 'Dharmeshwaran S', 'oid': 'ad131f73-a25e-455a-8443-4263b27c12af', 'preferred_username': 'dharmicrm12@gmail.com', 'rh': '1.Ab4ATPBQbtcijkuPogj1d9-lqn1_CpohNm9FsDB5dV4ZbBG-AIe-AA.', 'sub': 'eQri3su-AkgR0xBqLbKy8_L1iHiVL5sDR8hBsJB3R8s', 'tid': '6e50f04c-22d7-4b8e-8fa2-08f577dfa5aa', 'uti': 'flRJsvqyo0-E20_jN6_uAA', 'ver': '2.0'}"""
     # user = json.loads(userJson)
@@ -314,7 +318,7 @@ async def index(request: Request):
             "user": user,
             "config": CONFIG  # Pass the CONFIG dictionary
         })
-        response.set_cookie(key="loggedUser", value=user["name"], max_age=1800)  # expires in 30 minutes
+        response.set_cookie(key="loggedUser", value=getSessionUser(request), max_age=1800)  # expires in 30 minutes
     else:
         response = RedirectResponse(url="/login")
     
@@ -368,7 +372,7 @@ async def create_gpt(request: Request, loggedUser: str = Cookie(None), gpt: str 
 async def get_gpts(request: Request):
     gpts = []
     loggedUser = getUserName(request, "get_gpts")
-    logger.info(f"User: {json.dumps(request.session.get('user'))}")
+    #logger.info(f"User: {json.dumps(request.session.get('user'))}")
 
     if loggedUser != None and loggedUser != "N/A":
         gpts = list(gpts_collection.find({'user': loggedUser}))  # Get all GPTs from MongoDB
@@ -755,18 +759,19 @@ def print_session_values(request: Request, callee: str):
 
 def getUserName(request: Request, callee: str):
     loggedUser = "N/A"
-    user = request.session.get("user")
+    # user = getSessionUser(request)
 
-    if user is None:
-        loggedUser = request.cookies.get("loggedUser")
-        logger.info("Fetch => loggedUser from cookie")
-    else:
-        loggedUser = user["name"]
-        logger.info(f"Fetch => loggedUser from session")
+    # if user is None:
+    #     loggedUser = request.cookies.get("loggedUser")
+    #     logger.info("Fetch => loggedUser from cookie")
+    # else:
+    #     loggedUser = user["name"]
+    #     logger.info(f"Fetch => loggedUser from session")
 
-    logger.info(f"Calling Method : {callee} User: {loggedUser}") 
+    # logger.info(f"Calling Method : {callee} User: {loggedUser}") 
     #return loggedUser if loggedUser else "N/A" 
-    return loggedUser if loggedUser else "Dharmeshwaran S"
+    #return loggedUser if loggedUser else "Dharmeshwaran S"
+    return "Dharmeshwaran S"
 
 # if __name__ == "__main__":
 #    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

@@ -123,12 +123,12 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- MSAL Setup ---
-msal_app = msal.ConfidentialClientApplication(
-    CONFIG["CLIENT_ID"],
-    client_credential=CONFIG["CLIENT_SECRET"],
-    authority=CONFIG["AUTHORITY"],
-    token_cache=msal.SerializableTokenCache() # Initialize token_cache
-)
+# msal_app = msal.ConfidentialClientApplication(
+#     CONFIG["CLIENT_ID"],
+#     client_credential=CONFIG["CLIENT_SECRET"],
+#     authority=CONFIG["AUTHORITY"],
+#     token_cache=msal.SerializableTokenCache() # Initialize token_cache
+# )
 
 # --- Startup and Shutdown Handlers (For Token Cache Persistence) ---
 # @app.on_event("startup")
