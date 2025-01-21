@@ -298,20 +298,16 @@ async def maf_index_1(request: Request, TID: str):
             "config": CONFIG  # Pass the CONFIG dictionary
         })
 
-        response.set_cookie(key="loggedUser", value=user["name"], max_age=1800)  # expires in 30 minutes
+        response.set_cookie(key="loggedUser", value=getSessionUser(request), max_age=1800)  # expires in 30 minutes
     else:
-        response = RedirectResponse(url="/login")
+       # response = RedirectResponse(url="/login")
+        response = RedirectResponse(url="/")
     
     return response
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     user = getSessionUser(request)
-
-    # userJson = """{'aud': '9a0a7f7d-3621-456f-b030-79755e196c11', 'iss': 'https://login.microsoftonline.com/6e50f04c-22d7-4b8e-8fa2-08f577dfa5aa/v2.0', 'iat': 1736840089, 'nbf': 1736840089, 'exp': 1736843989, 'aio': 'AYQAe/8ZAAAAHlh6j2rWIcLG6U6X6x56nM1gTflFuALNfvhnNP1uZuiXGQ3VSWrk/4EDlGDNuYY7LTx9BGA2n7u4oJLQVSXqiHg9eAwlQE2k5b1EppY6XrSmqMGcMYiC+zskLO3jqKwPw9Ykq9TPKmZs7+dIhgE0lfdL+Jo1kKbPDr/57XUvJig=', 'idp': 'https://sts.windows.net/9188040d-6c67-4c5b-b112-36a304b66dad/', 'name': 'Dharmeshwaran S', 'oid': 'ad131f73-a25e-455a-8443-4263b27c12af', 'preferred_username': 'dharmicrm12@gmail.com', 'rh': '1.Ab4ATPBQbtcijkuPogj1d9-lqn1_CpohNm9FsDB5dV4ZbBG-AIe-AA.', 'sub': 'eQri3su-AkgR0xBqLbKy8_L1iHiVL5sDR8hBsJB3R8s', 'tid': '6e50f04c-22d7-4b8e-8fa2-08f577dfa5aa', 'uti': 'flRJsvqyo0-E20_jN6_uAA', 'ver': '2.0'}"""
-    # user = json.loads(userJson)
-
-    logger.info(f"user {user}")
     if user:
         response = templates.TemplateResponse("index.html", {
             "request": request, 
@@ -320,7 +316,8 @@ async def index(request: Request):
         })
         response.set_cookie(key="loggedUser", value=getSessionUser(request), max_age=1800)  # expires in 30 minutes
     else:
-        response = RedirectResponse(url="/login")
+        #response = RedirectResponse(url="/login")
+        response = RedirectResponse(url="/")
     
     return response
 
@@ -632,35 +629,35 @@ async def get_image(imagePath: str):
     
     return response
     
-@app.get("/userProfile")
-async def getUserProfile(request: Request):
- try:
-     accounts = msal_app.get_accounts()
-     if accounts:
-         token = msal_app.acquire_token_silent(
-             CONFIG["SCOPE"],
-             account=accounts[0],  # Use the first logged-in account
-         )
-     else:
-         # If no accounts are found, redirect to login
-         return RedirectResponse(url="/login")
+# @app.get("/userProfile")
+# async def getUserProfile(request: Request):
+#  try:
+#      accounts = msal_app.get_accounts()
+#      if accounts:
+#          token = msal_app.acquire_token_silent(
+#              CONFIG["SCOPE"],
+#              account=accounts[0],  # Use the first logged-in account
+#          )
+#      else:
+#          # If no accounts are found, redirect to login
+#          return RedirectResponse(url="/login")
 
-     if "error" in token: # Handle error
-         logging.error(f"Error acquiring token silently: {token.get('error')}, {token.get('error_description')}")  # Log details
-         # You might want to handle different error types specifically, like interaction_required
-         return RedirectResponse(url="/login")
+#      if "error" in token: # Handle error
+#          logging.error(f"Error acquiring token silently: {token.get('error')}, {token.get('error_description')}")  # Log details
+#          # You might want to handle different error types specifically, like interaction_required
+#          return RedirectResponse(url="/login")
 
-     api_result = requests.get(
-         CONFIG["ENDPOINT"],
-         headers={"Authorization": "Bearer " + token["access_token"]},
-         timeout=30,
-     ).json()
+#      api_result = requests.get(
+#          CONFIG["ENDPOINT"],
+#          headers={"Authorization": "Bearer " + token["access_token"]},
+#          timeout=30,
+#      ).json()
      
-     return templates.TemplateResponse("display.html", {"request": request, "data": api_result})
+#      return templates.TemplateResponse("display.html", {"request": request, "data": api_result})
 
- except Exception as e:  # Handle broader exceptions
-     logging.exception(f"Error in call_downstream_api: {str(e)}")
-     return templates.TemplateResponse("auth_error.html", {"request": request, "error": str(e)})  # Render a general error page
+#  except Exception as e:  # Handle broader exceptions
+#      logging.exception(f"Error in call_downstream_api: {str(e)}")
+#      return templates.TemplateResponse("auth_error.html", {"request": request, "error": str(e)})  # Render a general error page
 
 def getDeployments():
 
@@ -688,16 +685,16 @@ def getDeployments():
     return deployed_model_names
 
 # MSAL Authentication: Acquire token for Azure Management API
-def get_access_token(msal_app):
-    # Acquire token for Azure Management API (scopes)
-    result = msal_app.acquire_token_for_client(scopes=["https://management.azure.com/.default"])
+# def get_access_token(msal_app):
+#     # Acquire token for Azure Management API (scopes)
+#     result = msal_app.acquire_token_for_client(scopes=["https://management.azure.com/.default"])
     
-    if "access_token" in result:
-        logger.info("Successfully acquired access token.")
-        return result["access_token"]
-    else:
-        logger.error("Failed to acquire access token.")
-        raise Exception("Authentication failed: " + result.get("error_description", "Unknown error"))
+#     if "access_token" in result:
+#         logger.info("Successfully acquired access token.")
+#         return result["access_token"]
+#     else:
+#         logger.error("Failed to acquire access token.")
+#         raise Exception("Authentication failed: " + result.get("error_description", "Unknown error"))
 
 def getDeployments2():
     deployed_model_names = []
@@ -738,27 +735,27 @@ def getDeployments2():
 
     return deployed_model_names
 
-def print_session_values(request: Request, callee: str):
-    session = request.session
+# def print_session_values(request: Request, callee: str):
+#     session = request.session
     
-    logger.info(f"Calling Method : {callee}. Session Information:\n")
-    for key, value in session.items():
-        logger.info(f"{key}: {value}\n")
+#     logger.info(f"Calling Method : {callee}. Session Information:\n")
+#     for key, value in session.items():
+#         logger.info(f"{key}: {value}\n")
 
-    session = request.session.get("session")
-    logger.info("session_cookie Information:\n")
-    if session != None:
-        for key, value in session.items():
-            logger.info(f"{key}: {value}\n")
+#     session = request.session.get("session")
+#     logger.info("session_cookie Information:\n")
+#     if session != None:
+#         for key, value in session.items():
+#             logger.info(f"{key}: {value}\n")
 
-    session = request.session.get("_session")
-    logger.info("_session Information:\n")
-    if session != None:
-        for key, value in session.items():
-            logger.info(f"{key}: {value}\n")
+#     session = request.session.get("_session")
+#     logger.info("_session Information:\n")
+#     if session != None:
+#         for key, value in session.items():
+#             logger.info(f"{key}: {value}\n")
 
 def getUserName(request: Request, callee: str):
-    loggedUser = "N/A"
+    # loggedUser = "N/A"
     # user = getSessionUser(request)
 
     # if user is None:

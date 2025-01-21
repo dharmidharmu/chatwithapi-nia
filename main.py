@@ -113,7 +113,7 @@ middleware = [
  )
 ]
 
-app = FastAPI(middleware=middleware, trusted_hosts=["customgptapp.azurewebsites.net","https://niaapp2.azurewebsites.net"])
+app = FastAPI(middleware=middleware, trusted_hosts=["customgptapp.azurewebsites.net","niaapp2.azurewebsites.net"])
 
 # Set up Jinja2 for templating
 templates = Jinja2Templates(directory="templates")
@@ -294,7 +294,7 @@ async def maf_index_1(request: Request, TID: str):
             "config": CONFIG  # Pass the CONFIG dictionary
         })
 
-        response.set_cookie(key="loggedUser", value=user["name"], max_age=1800)  # expires in 30 minutes
+        response.set_cookie(key="loggedUser", value=getSessionUser(request), max_age=1800)  # expires in 30 minutes
     else:
        # response = RedirectResponse(url="/login")
         response = RedirectResponse(url="/")
@@ -310,7 +310,7 @@ async def index(request: Request):
             "user": user,
             "config": CONFIG  # Pass the CONFIG dictionary
         })
-        response.set_cookie(key="loggedUser", value=user["name"], max_age=1800)  # expires in 30 minutes
+        response.set_cookie(key="loggedUser", value=getSessionUser(request), max_age=1800)  # expires in 30 minutes
     else:
         #response = RedirectResponse(url="/login")
         response = RedirectResponse(url="/")
@@ -400,7 +400,7 @@ async def chat(request: Request, gpt_id: str, gpt_name: str, user_message: str =
 
     return JSONResponse({"response": response['model_response'], "total_tokens" : response['total_tokens'] if response['total_tokens'] else 0, "follow_up_questions": response['follow_up_questions'] }, status_code=200)
 
-@app.put("/update_instruction/{gpt_id}/{gpt_name}/{usecase_id}")
+@app.post("/update_instruction/{gpt_id}/{gpt_name}/{usecase_id}")
 async def update_instruction(request: Request, gpt_id: str, gpt_name: str, usecase_id: str):
     logger.info(f"Updating instruction for GPT with ID: {gpt_id} Name: {gpt_name} Usecase : {usecase_id}")
 
@@ -501,6 +501,7 @@ async def get_chat_history(gpt_id: str, gpt_name: str):
     chat_history = fetch_chat_history(gpt_id, gpt_name, max_tokens_in_conversation)  # Fetch chat history from MongoDB
 
     # After saving the image, read its contents and encode the image as base64
+    # The image URL will be saved in the chat. Use the URL to pick the image from the server
     for chat in chat_history:
         if "chatimages" in chat["content"]:
             uploads_directory = os.path.dirname(__file__)
@@ -511,17 +512,20 @@ async def get_chat_history(gpt_id: str, gpt_name: str):
     if chat_history is None or chat_history == []:
         response = JSONResponse({"error": "No Chats in the GPT"}, status_code=404)
     else:
-        response = JSONResponse({"chat_history": chat_history[::-1], "token_count": len(chat_history)}, status_code=200) #reverse the list for linear view or to see proper conversation flow
+        #reverse the list for linear view or to see proper conversation flow
+        response = JSONResponse({"chat_history": chat_history[::-1], "token_count": len(chat_history)}, status_code=200) 
 
     return response
 
-@app.delete("/clear_chat_history/{gpt_id}/{gpt_name}")
+@app.put("/clear_chat_history/{gpt_id}/{gpt_name}")
 async def clear_chat_history(gpt_id: str, gpt_name: str):
     logger.info(f"Clearing chat history for GPT: {gpt_id} Name: {gpt_name}")
 
     result = delete_chat_history(gpt_id, gpt_name)  # Delete all documents in the collection
+
+    logger.info(f"Modified count: {result.modified_count}")
     
-    if result.deleted_count > 0:
+    if result.modified_count > 0:
         response = JSONResponse({"message": "Cleared conversations successfully!"})
     else:
         response = JSONResponse({"error": "No messages found in GPT"}, status_code=404)
@@ -552,8 +556,6 @@ async def get_logs():
         log_content = f.read()
 
     logger.info(log_filename)  
-
-    #getDeployments() 
 
     return {"log_content": log_content}
 
@@ -623,42 +625,35 @@ async def get_image(imagePath: str):
     
     return response
     
-@app.get("/userProfile")
-async def getUserProfile(request: Request):
- try:
-     accounts = msal_app.get_accounts()
-     if accounts:
-         token = msal_app.acquire_token_silent(
-             CONFIG["SCOPE"],
-             account=accounts[0],  # Use the first logged-in account
-         )
-     else:
-         # If no accounts are found, redirect to login
-         return RedirectResponse(url="/login")
+# @app.get("/userProfile")
+# async def getUserProfile(request: Request):
+#  try:
+#      accounts = msal_app.get_accounts()
+#      if accounts:
+#          token = msal_app.acquire_token_silent(
+#              CONFIG["SCOPE"],
+#              account=accounts[0],  # Use the first logged-in account
+#          )
+#      else:
+#          # If no accounts are found, redirect to login
+#          return RedirectResponse(url="/login")
 
-     if "error" in token: # Handle error
-         logging.error(f"Error acquiring token silently: {token.get('error')}, {token.get('error_description')}")  # Log details
-         # You might want to handle different error types specifically, like interaction_required
-         return RedirectResponse(url="/login")
+#      if "error" in token: # Handle error
+#          logging.error(f"Error acquiring token silently: {token.get('error')}, {token.get('error_description')}")  # Log details
+#          # You might want to handle different error types specifically, like interaction_required
+#          return RedirectResponse(url="/login")
 
-     api_result = requests.get(
-         CONFIG["ENDPOINT"],
-         headers={"Authorization": "Bearer " + token["access_token"]},
-         timeout=30,
-     ).json()
+#      api_result = requests.get(
+#          CONFIG["ENDPOINT"],
+#          headers={"Authorization": "Bearer " + token["access_token"]},
+#          timeout=30,
+#      ).json()
      
-     return templates.TemplateResponse("display.html", {"request": request, "data": api_result})
+#      return templates.TemplateResponse("display.html", {"request": request, "data": api_result})
 
- except Exception as e:  # Handle broader exceptions
-     logging.exception(f"Error in call_downstream_api: {str(e)}")
-     return templates.TemplateResponse("auth_error.html", {"request": request, "error": str(e)})  # Render a general error page
- 
-# if __name__ == "__main__":
-#    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
-
-#if __name__ == "__main__":
-#    port = int(os.getenv("PORT", 8000))  # Use the environment variable or default to 8000
-#    uvicorn.run(app, host="0.0.0.0", port=port)
+#  except Exception as e:  # Handle broader exceptions
+#      logging.exception(f"Error in call_downstream_api: {str(e)}")
+#      return templates.TemplateResponse("auth_error.html", {"request": request, "error": str(e)})  # Render a general error page
 
 def getDeployments():
 
