@@ -1,0 +1,319 @@
+* {
+   font-family: Arial, sans-serif;
+}
+/* Add some basic styling for the sidebar */
+.sidebar {
+    height: 100vh; 
+    width: 15%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    /* background-color: #f8f9fa;  */
+    background-color: #343a40!important;
+    padding-top: 70px; 
+}
+
+.content-container {
+    margin-left: 150px; 
+    padding: 20px;
+    margin-top: 15px;
+    width: 80%;
+}
+
+/* Slide-out Modal from Right */
+.modal-dialog-slideout {
+    min-height: calc(100% - 3.5rem); 
+    margin: 1.75rem auto !important;
+}
+
+@media (min-width: 576px) {
+    .modal-dialog-slideout {
+        max-width: 500px;
+        margin: 1.75rem 0 !important;
+    }
+
+    .modal-dialog-slideout.modal-sm {
+        max-width: 300px;
+    }
+}
+
+.modal-dialog-slideout .modal-content {
+    min-height: 100%;
+    /* border-radius: 0; */
+    border-radius: 15px; /* Rounded corners for the modal */
+    box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+.modal-dialog-slideout.modal-lg .modal-content {
+    min-height: calc(100% - 1.75rem);
+}
+
+.modal-dialog-slideout.modal-xl .modal-content {
+    min-height: calc(100% - 3.5rem);
+}
+
+.modal-dialog-slideout .modal-content {
+    transition: transform .3s ease-out; 
+    transform: translateX(100%);
+}
+
+.modal-dialog-slideout .modal-dialog.show {
+    transform: translateX(-100%); 
+}
+
+.modal-dialog-slideout .modal-body {
+    overflow-y: auto; 
+}
+
+button:not(#sendMessageButton) {
+   margin: 5px; /* Add some margin to the button */
+   border-radius: 50rem; /* Add rounded corners for all buttons */
+}
+
+#sendMessageButton {
+   margin-top: -8px; /* Add some margin to the button */
+}
+
+.delete-button {
+   margin-left: 10px; /* Add some margin to the button */
+} 
+
+/* Chat Bubble Styling */
+/* #chat-container {
+   height: 400px;
+   padding: 10px;
+   border: 1px solid #ced4da;
+   overflow: scroll;
+   max-width: auto; Make the container wider 
+   margin: 0 auto; Center the container 
+} */
+
+#userInput {
+   height: 150px;
+   outline: auto;
+}
+
+/* Chat Container */
+.chat-container { 
+   display: flex;
+   flex-direction: column; /* Stack messages vertically */
+   align-items: flex-end; /* Align user messages to the right */ 
+   overflow-y: scroll; /* Add scrollbars if needed */
+}
+
+/* User Message */
+.user-message {
+background-color: lightgray; /* Or your preferred color */
+align-self: flex-end;    /* Align to the right */
+margin-left: 50px;      /* Add margin to create visual separation */
+}
+
+/* Assistant Message */
+.ai-message {
+background-color: rgb(205, 224, 237); /* Or your preferred color */
+align-self: flex-start;   /* Align to the left (default) */
+margin-right: 50px;     /* Add margin for visual separation */
+}
+
+.chat-list {
+   list-style-type: none; 
+   padding: 0;
+}
+
+.message {
+   padding: 10px;
+   border-radius: 5px; 
+   margin-bottom: 10px;
+   clear: both; 
+}
+
+.nav-link.active{
+   background-color: #8cbdee;
+   color: rgb(5,5,5);
+   opacity:0.5;
+   border-radius:15px; /* Adjust the value for more or less rounding */
+   transition: background-color0.3s ease, color0.3s ease, opacity0.3s ease; /* Smooth transition */
+   padding:10px15px; /* Add padding for better spacing */
+   margin: 10px;
+}
+
+.alert {
+   margin: 10px 200px 30px;
+}
+
+.btn-danger i { 
+   font-size: 1.2em; 
+}
+
+.delete-gpt-button, .edit-gpt-button, .clear-gpt-button {
+   font-size: 1.2em;  /* Adjust size as needed */
+   margin-right: 5px; /* Add spacing if necessary */
+   cursor: pointer;
+   color: white!important;
+}
+
+/* Overlay Styles */
+#loading-overlay {
+   display: none; /* Hidden by default */
+   position: fixed;
+   top: 0;
+   left: 0;
+   width: 100%;
+   height: 100%;
+   background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+   z-index: 1000; /* Ensure overlay is on top */
+}
+
+/* Spinner Container Styles */
+#loading-spinner {
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%); /* Center the spinner */
+   color: white; /* Change spinner color as needed */
+   font-size: 2em; /* Adjust spinner size */
+}
+
+.button-group{
+   margin-top: 10px;
+   padding-left: 10px;
+}
+
+.even {
+   color: #18837E;
+   font-weight: 500;
+}
+
+.odd {
+   color: #9E2896;
+   font-weight: 500;
+}
+
+#bgsw_title{
+   font-size: 1.5em;
+   font-weight: 500;
+}
+
+#logo {
+   height: 50px;
+   width: auto;
+}
+
+.sidebar > * {
+   margin: 10px;
+}
+
+#gptTitle {
+   font-size: 1.5em;
+   font-weight: 500;
+   align-items: center;
+}
+
+#tokenCount {
+   font-size: small;
+   margin: 2px;
+}
+
+.user-info {
+   color: #ffffff;
+   float: right;
+   margin-left: 600px !important;
+}
+
+.logged-info {
+   float: right;
+   /* margin-left: 800px !important; */
+}
+
+
+.token-progress {
+   display: none;
+   width: 100%;
+   background-color: #e0e0e0;
+   height: 20px;
+   border-radius: 5px;
+   margin-top: 10px; /* Add margin */
+   overflow: hidden; /* Hide excess progress */
+   position: relative; /* For text positioning */
+}
+.token-progress-bar {
+   height: 100%;
+   background-color: #4CAF50; /* Green progress color */
+   width: 0%; /* Initial width 0% */
+   transition: width 0.5s ease-in-out;  /* Smooth transition */
+}
+.token-progress-text {
+ position: absolute;
+ top: 50%;
+ left: 50%;
+ transform: translate(-50%, -50%);
+ color: rgb(0, 0, 0);
+ font-weight: bold;
+}
+
+.config-panel {
+ display: none; /* Initially hidden */
+ background-color: white;
+ border: 1px solid #ccc;
+ padding: 15px;
+ margin-top: 10px;
+
+}
+.config-toggle {
+ cursor: pointer; /* Make it look clickable */
+ -webkit-user-select: none; /* Prevent text selection */
+
+}
+
+.config-panel{
+   display: none; /* Initially hidden */
+   width: 1000px;
+   margin: 30px;
+}
+
+#usecaseButtons {
+   margin: 25px;
+}
+
+.bevel-emboss {
+   box-shadow:
+       inset 2px 2px 3px rgba(255,255,255,0.6),
+       inset -2px -2px 3px rgba(0,0,0,0.6);
+   filter: grayscale(20%) contrast(120%); /* Optional: enhance effect */
+
+}
+
+#ticketSummary {
+   /* width: 700px; */
+   overflow: hidden;
+   text-wrap: auto;
+   font-size: large;
+   background: rgb(255, 255, 255);
+}
+
+.maf-summary {
+   width: 1000px;
+   overflow: hidden;
+   text-wrap: auto;
+   font-size: large;
+   margin-left: 30px;
+}
+
+/* .maf-summary  p .odd {
+   background-color: #18837E;
+}
+
+.maf-summary  p .even {
+   background-color: #9E2896;
+} */
+
+#conversationTextArea {
+   overflow: auto;
+   resize: vertical;
+   padding-left: 10px;
+   margin-left: 30px;
+}
+
+.mafBody {
+   background: rgb(255, 255, 255);
+}

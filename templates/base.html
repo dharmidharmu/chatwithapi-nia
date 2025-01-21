@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>NIA</title>
+ <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"> 
+ <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+ <link rel="stylesheet" href="../static/css/chatwithapi.css"> 
+ <style>
+ </style>
+</head>
+<body>
+ <div id="loading-overlay">
+    <div id="loading-spinner">
+        <i class="fas fa-spinner fa-spin"></i>  Loading... 
+    </div>
+ </div>
+
+ <nav class="navbar navbar-expand-lg navbar-light bg-dark fixed-top"> 
+    <a class="navbar-brand" href="#">
+        <img src="../static/images/bgsw_opacity.png" id="logo" class="d-inline-block align-top" alt="">
+        <!-- <span id="bgsw_title"><span class="odd">N</span><span class="even">e</span><span class="odd">x</span><span class="even">t</span>&nbsp;<span class="odd">G</span><span class="even">e</span><span class="odd">n</span>&nbsp;<span class="even">C</span><span class="odd">X</span></span> -->
+        <span id="bgsw_title"><span class="odd">N</span><span class="even">I</span><span class="odd">A</span></span>
+        </img>
+        </a>
+    <span style="margin-left: 650px;color: #f8f9fa;"><h4>NextGen Intelligent Assistant</h4></span>
+    <span class="user-area">
+        <span class="user-info"> 
+            {% if user %}  
+                Welcome <a class="profile-info" href="/userProfile">{{ user.get("name") }}!!!&nbsp;&nbsp; </a>
+                <a class="logged-info" href="/logout">Logout</a>
+            {% else %}
+                <a href="/login">Login</a>
+            {% endif %}
+        </span> 
+    </span>
+ </nav>
+
+ <div class="container-fluid" style="margin-top: 20px;">
+     <div class="row">
+         <div class="col-md-3 sidebar"> 
+             <ul class="nav flex-column">
+                 <li class="nav-item">
+                     <a class="nav-link active" href="#">New GPT Bot</a>
+                 </li>
+                 <li class="nav-item">
+                     <a class="nav-link" href="#">Chat History List</a>
+                 </li>
+             </ul>
+         </div>
+         <div class="col-md-9 content-container">
+             {% block content %}
+                 <!-- Modal content will be inserted here -->
+             {% endblock %}
+         </div>
+     </div>
+ </div>
+ <footer style="text-align: right">Microsoft identity platform {{ version }} powered application.</footer>
+
+ <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+ <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+ <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+ <script src="../static/js/script.js"></script>
+</body>
+</html>

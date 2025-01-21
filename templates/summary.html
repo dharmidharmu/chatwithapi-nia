@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIA-MAF</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="../static/css/chatwithapi.css"> 
+</head>
+<body class="mafBody">
+    <nav class="navbar navbar-expand-lg navbar-light bg-dark fixed-top"> 
+        <a class="navbar-brand" href="#">
+            <img src="../static/images/bgsw_opacity.png" id="logo" class="d-inline-block align-top" alt="">
+            <!-- <span id="bgsw_title"><span class="odd">N</span><span class="even">e</span><span class="odd">x</span><span class="even">t</span>&nbsp;<span class="odd">G</span><span class="even">e</span><span class="odd">n</span>&nbsp;<span class="even">C</span><span class="odd">X</span></span> -->
+            <span id="bgsw_title"><span class="odd">N</span><span class="even">I</span><span class="odd">A</span></span>
+            </img>
+            </a>
+        <span style="margin-left: 650px;color: #f8f9fa;"><h4>MAF Ticket Summary App</h4></span>
+        <span class="user-area">
+            <span class="user-info"> 
+                {% if user %}  
+                    Welcome <a class="profile-info" href="/userProfile">{{ user.get("name") }}!!!&nbsp;&nbsp; </a>
+                    <a class="logged-info" href="/logout">Logout</a>
+                {% else %}
+                    <a href="/login">Login</a>
+                {% endif %}
+            </span> 
+        </span>
+     </nav>
+    <div id="ticketSummary">
+        <h4 style="margin-top: 100px;margin-left: 10px;color: white;">Summary of ticket {{ticketId}} </h4>
+        <div style="display: flex;">
+            <pre class="maf-summary">
+                {% if isErrorResponse %}
+                    <p><b>Json:</b><br>{{ticket_conversation}}</p>
+                {% else %}
+                    <p><b>Title:</b><br>{{ticketSummary.title}}</p>
+                    <!-- <p class="odd"><b>Description:</b><br>{{ticketSummary.description}}</p>
+                    <p class="even"><b>Questions Asked:</b><br>{{ticketSummary.questions}}</p> -->
+                    <p><b>Summary:</b><br>{{ticketSummary.summary}}</p>
+                    <!-- <p class="even"><b>Resolution:</b><br>{{ticketSummary.resolution}}</p> -->
+                    <p><b>Next Steps:</b><br>{{ticketSummary.next_steps}}</p>
+                {% endif %}
+            </pre>
+            <!-- <label for="conversation"></label>
+            <textarea id="conversationTextArea" name="conversation" rows="25" cols="100" title="Actual Conversation" readonly>{{ticket_conversation}}</textarea> -->
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,41 @@
+Next topics: 
+Follow-up questions to be generated automatically
+Implement Caching mechanism for faster converstaion loading (Now its per chat entire query fetched from DB. Performance issue)
+Add new fields to the dataset for identified usecases
+Auto summarization of previous conversation post certain limit
+Error code: 400 - {'error': {'message': "This model's maximum context length is 8192 tokens. However, you requested 8395 tokens (7695 in the messages, 700 in the completion). Please reduce the length of the messages or completion.", 'type': 'invalid_request_error', 'param': 'messages', 'code': 'context_length_exceeded'}}
+Include Vector search via vector configuration
+Use a caching mechanism to load and store the conversations, instead of fetching from DB for every call
+UI improvements
+Integrate audio to text, audio to audio models
+Try to extend the limit of image processing
+Generate graphical representation of order analysis (Charts, Tables directly in the response)
+Function calling
+Create Azure AI indexes, indexers, semantic configuration, vectors from code. Probably an admin screen entity
+
+
+Summary of converstaion in call 
+1. record the conversation in real time 
+2. based on minutes/words/token threshold form paragraphs
+3. create summary of each paragraph
+4. While creating summary for paragraph2, use the conversation from paragraph1 + summary of paragraph1 for more detailed summary 
+5. iterate the process for all the paragraphs in the conversation.
+
+
+KT helper
+1. While giving KT or sessions the model is made a participating member actively listening 
+2. In background, the model processes the vision its seeing and train itself
+3. The model will behave like an assistant to the actual team member in the future assignments 
+
+Tacton CPQ Helper
+
+Added conditions in Libraries and 800Xa Step
+in sofaProduct_module added F2024
+
+React Project
+1. How to build and run - local infra
+2. Any idea on deploying to azure
+3. Integrating front end authentication with front end
+4. Call llama from NIA
+5. Get the function calling working to avoid unwanted Azure AI calls
+6. Find a way for indexing in llama

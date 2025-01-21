@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- Show notifications on top -->
+<div id="notifications">
+    <!-- Error message -->
+    <div id="errorMsg" class="alert alert-danger" role="alert" style="display: none;">
+    </div>
+    <div id="successMsg" class="alert alert-success" role="alert" style="display: none;">
+    </div>
+</div>
+
+<!-- New GPT Modal -->
+ <div class="modal fade" id="newGptModal" tabindex="-1" role="dialog" aria-labelledby="newGptModalLabel" aria-hidden="true">
+     <div class="modal-dialog modal-dialog-slideout modal-lg" role="document">
+         <div class="modal-content">
+             <div class="modal-header">
+                 <h5 class="modal-title" id="newGptModalLabel">New GPT</h5>
+                 <button type="button" id="closePopup" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                     <span aria-hidden="true">x</span>
+                 </button>
+             </div>
+             <div class="modal-body">
+                 <form id="newGptForm" enctype="multipart/form-data">
+                     <div class="form-group">
+                         <label for="gptName">Name:</label>
+                         <!-- <input type="text" class="form-control" id="gptName" placeholder="Enter GPT name"> -->
+                        <select class="form-select form-control" id="gptName" placeholder="Select Model">
+                        </select>
+                     </div>
+                     <div class="form-group">
+                         <label for="gptDescription">Description:</label>
+                         <textarea class="form-control" id="gptDescription" rows="3" placeholder="Enter GPT description"></textarea>
+                     </div>
+                     <div class="form-group">
+                         <label for="gptInstructions">Instructions:</label>
+                         <textarea class="form-control" id="gptInstructions" rows="3" placeholder="Enter GPT instructions"></textarea>
+                     </div>
+                     <div class="form-group form-check">
+                        <input type="checkbox" class="form-check-input" id="ragCheckbox">
+                        <label class="form-check-label" for="ragCheckbox">Use RAG/Image
+                            Analysis?</label>
+                    </div>
+                    <div class="form-group" id="fileUploadSection" style="display: none;">
+                        <label for="fileInput" multiple class="form-label">Upload
+                            Files:</label>
+                        <input type="file" class="form-control-file" id="fileInput" multiple>
+                        <div id="fileUploadError" class="text-danger"></div> 
+                    </div>
+                     <button type="submit" class="btn btn-primary submitButton" data-bs-dismiss="modal">Save and Close</button>
+                 </form>
+             </div>
+         </div>
+     </div>
+ </div>
+
+ <div class="sidebar">
+     <ul class="nav flex-column">
+         <li class="nav-item">
+            <button class="primary" type="button" id="createGptButton" data-toggle="modal" data-target="#newGptModal"><i class="fas fa-plus"></i> New GPT</button>
+         </li>
+         <li class="nav-item">
+            <button type="button" class="danger" class="btn btn-danger btn-block" id="deleteAllGPTsButton"><i class="fas fa-trash-alt"></i> Delete All GPTs</button>
+         </li>
+         <li class="nav-item">
+             <a class="nav-link" id="showLogs" href="#">Show Logs</a>
+             <ul id="historyList"></ul> 
+         </li>
+         
+     </ul>
+ </div>
+
+ <div id="contentContainer" class="content-container">
+     <h1 id="gptTitle">NIA</h1>
+     <div class="row" id="welcomeMessageDiv" style="display: inline;">
+         <p>&nbsp;&nbsp;&nbsp;NIA is a conversational AI platform that uses GPT-3 to generate responses to user queries. <br/>&nbsp;&nbsp;&nbsp;You can create new GPTs, view chat history, and delete GPTs from the sidebar.</p>
+         <div class="col-md-9">
+            <img src="../static/images/welcome_image_low_res.png" width="600" height="500"  alt="NIA">
+         </div>
+         <div class="col-md-6">
+            <hr/>
+            <p><b><u>Instructions:</u></b></p>
+            <ul>
+                <li>Enter a message in the text box below and click "Send" to start a conversation with the selected GPT.</li>
+                <li>Click on the image icon to upload an image for RAG/Image Analysis.</li>
+                <li>Click on the "New GPT" button to create a new GPT.</li>
+                <li>Click on the "Delete All GPTs" button to delete all GPTs.</li>
+                <li>Click on the "Show Logs" button to view the chat history.</li>
+            </ul>
+         </div>
+    </div>
+
+    <div class="row" id="gptLoadedDiv"  style="display: none;">
+        <p>Only the last 10 conversations are shown in the UI when you select a GPT. Internally, all the prior conversations are considered for generating responses.</p>
+     
+        <div class="container md-col-9" id="chat-container">
+            <div class="col-md-12">
+                <div class="row">
+                    <ul id="chat-history" class="chat-list"></ul>
+                    <div class="input-group mb-12">
+                        <div id="chatControls" class="input-group mb-9">
+                            <textarea type="text" class="form-control" id="userInput" placeholder="Start a conversation..." required></textarea>
+                            
+                            <div class="button-group"> 
+                                <form id="sendMessageForm">
+                                    <label for="image-upload" class="btn btn-secondary">
+                                        <i class="fas fa-image"></i>
+                                    </label>
+                                    <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                                    <input type="submit" class="btn btn-primary px-4" id="sendMessageButton" value="Send"></button>
+                                    <span class="spinner-border spinner-border-sm ml-2" role="status" aria-hidden="true" id="sendLoadingIndicator" style="display: none;"></span>
+                                    
+                                    <!-- Token progress bar -->
+                                    <button type="button" class="btn btn-danger btn-block" id="config-toggle"><i class="fas fa-snowflake"></i> Config</button>
+                                    <div class="token-progress">  
+                                        <div class="token-progress-bar"></div>  <!-- The moving bar -->
+                                        <span class="token-progress-text">0/8000</span>  <!-- Token count text -->
+                                     </div>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div id="uploadedImageName" class="alert alert-primary" role="alert" style="display: none;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="config-panel" class=" md-col-3 config-panel" style="display: none;">
+            <h6>Configuration Parameters</h6>&nbsp;&nbsp;
+            <p>
+                <label for="max-tokens">Max response:</label>
+                <input type="range" id="max-tokens" min="0" max="800" value="800">
+                <span id="max-tokens-value">800</span>&nbsp;&nbsp;
+            </p>
+            <p>
+                <label for="temperature">Temperature:</label>
+                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7">
+                <span id="temperature-value">0.7</span>&nbsp;&nbsp;
+            </p>
+            <p>
+                <label for="top-p">Top P:</label>
+                <input type="range" id="top-p" min="0" max="1" step="0.01" value="0.95">
+                <span id="top-p-value">0.95</span>&nbsp;&nbsp;
+            </p>
+            <p>
+                <label for="frequency-penalty">Frequency penalty:</label>
+                <input type="range" id="frequency-penalty" min="-2" max="2" step="0.1" value="0">
+                <span id="frequency-penalty-value">0</span>&nbsp;&nbsp;
+            </p>
+            <p>
+                <label for="presence-penalty">Presence penalty:</label>
+                <input type="range" id="presence-penalty" min="-2" max="2" step="0.1" value="0">
+                <span id="presence-penalty-value">0</span>&nbsp;&nbsp;
+            </p>
+            <!-- USER LOGGED : {{ user | tojson(indent=4) }} -->
+        </div>
+    </div>
+</div>
+{% endblock %}

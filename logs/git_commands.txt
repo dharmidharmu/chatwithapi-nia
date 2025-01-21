@@ -1,0 +1,137 @@
+1. Initialize a new Git repository:
+    - If you are starting a new project, you initialize a new Git repository.
+
+    git init
+
+2. Clone an existing repository:
+    - If you are working on an existing project, you clone the repository to your local machine.
+
+    git clone <repository_url>
+
+3. Check the status of your repository
+    - Check the status of your repository to see which files are staged, unstaged, or untracked.
+
+    git status
+
+Make Changes: Modify, add, or delete files in your project directory.
+
+4. Add files to the staging area:
+    - Add the files you want to include in your next commit to the staging area.
+
+    git add <file_name>
+
+5. Add all files to stating area:
+    git add .
+
+5.1. Restore from staging area            =>  git restore --staged <file>
+5.2. Discard changes in working directory =>  git restore <file>
+
+6. Commit Changes
+    - Commit the staged changes with a descriptive message.
+
+    git commit -m "Commit message"
+
+7. View commit history:
+    - Check the commit history to see the changes made over time.
+    - Press Q to quit and exit the log
+
+    git log
+    
+
+8. Create a new branch:
+    - Create a new branch to work on a feature or fix without affecting the main branch.
+
+    git branch <branch_name>
+
+9. Switch to a branch:
+    - Switch to the branch you want to work on.
+
+    git checkout <branch_name>
+
+10. Merge a branch into the current branch:
+    - Merge changes from one branch into another (usually from a feature branch into the main branch).
+
+    git merge <branch_name>
+
+11. Push changes to a remote repository:
+    - Push your local commits to the remote repository.
+
+    git push origin <branch_name>
+
+12. Pull changes from a remote repository:
+    - Pull the latest changes from the remote repository to your local machine.
+
+    git pull origin <branch_name>
+
+13. Add a remote repository:
+    git remote add <remote_name> <repository_url>
+
+14. View remote repositories:
+    git remote -v
+
+14. Remove a remote repository:
+    git remote remove <remote_name> 
+
+
+15. Unstage files:
+    - Remove files from the staging area, but keep the changes in your working directory.
+   
+     git restore --staged <file_name>
+
+16. See the staged files:
+    - View the differences between the staged changes and the last commit.
+
+    git diff --staged   
+
+17. Exclude a file permanently from staging:
+    - If you want to exclude a file permanently from staging, you can use the following command:
+
+    git update-index --assume-unchanged <file_name> 
+
+18. Lock the index:
+    - Lock the index to prevent other processes from modifying it.
+
+    git update-index --lock
+
+19. Unlock the index:
+    - Unlock the index to allow other processes to modify it.
+
+    git update-index --unlock
+
+20. Create an index:
+    - Create a new index file.
+
+    git update-index --index-info <file_name>
+
+21. Modify the index:
+    - Modify the index by adding or removing files.
+
+    git update-index --add <file_name>
+    git update-index --remove <file_name>
+
+22. Delete the index:
+    - Delete the index file.
+
+    rm .git/index
+
+23. List all indexes:
+    - List all the indexes in your Git repository.
+
+    git ls-files --stage
+
+    
+24. Identify the current branch:
+    - Identify the current branch you are working on.
+
+    git branch --show-current
+
+25. Create a tag
+     git tag chatwithapi_3.0
+     git push origin --tags
+
+26. Push forcefully 
+    git push -f origin main
+
+27. rebase code
+     git rebase main (or)
+     git pull --rebase

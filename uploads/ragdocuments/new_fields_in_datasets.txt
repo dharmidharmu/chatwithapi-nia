@@ -1,0 +1,9 @@
+GENERATE_REPORTS - inventory_level, revenue -> Closed without these fields
+PRODUCT_INFORMATION - stock_level, inventory_level -> Closed without these fields
+
+To be indexed
+COMPLAINTS_AND_FEEDBACK - complaint_id, feedback, sentiment, action_taken, resolved_date, escalation_level
+HANDLE_FAQS - "faq_question", "faq_answer", "faq_topic", "support_contact
+SEASONAL_SALES - "sales_period", "total_sales", "quantity_sold", "offer_description", "discount_percentage", "sale_date", "sales_performance", "customer_behavior"
+GENERATE_MAIL_PROMOTION - ["offer_description", "discount_percentage", "validity_date", "coupon_code", "discount_value", "coupon_expiry", "product_id", "product_description", "product_launch_date", "customer_preferences", "historical_purchases"]
+REVIEW_BYTES - ["features", "rating"]

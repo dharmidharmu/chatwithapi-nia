@@ -1,0 +1,362 @@
+[
+  {
+    "complaint_id": "C001",
+    "product_id": "P015",
+    "feedback": "The 4K webcam quality is amazing but the mic picks up a lot of background noise.",
+    "sentiment": "neutral",
+    "action_taken": "Recommended using a noise-canceling microphone and offered a partial refund.",
+    "resolved_date": "2024-10-01",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C002",
+    "product_id": "P015",
+    "feedback": "The 4K webcam stopped working after a few uses, really disappointed.",
+    "sentiment": "negative",
+    "action_taken": "Issued a replacement unit and apologized for the inconvenience.",
+    "resolved_date": "2024-10-02",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C003",
+    "product_id": "P018",
+    "feedback": "The camera lens came scratched. Very disappointed.",
+    "sentiment": "negative",
+    "action_taken": "Sent a replacement lens and covered the return shipping costs.",
+    "resolved_date": "2024-10-06",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C004",
+    "product_id": "P018",
+    "feedback": "The autofocus is too slow on this camera, making it hard to capture moments.",
+    "sentiment": "negative",
+    "action_taken": "Offered a firmware update and tips to improve autofocus performance.",
+    "resolved_date": "2024-10-07",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C005",
+    "product_id": "P019",
+    "feedback": "The drone with the camera is fantastic, but the battery life is much shorter than advertised.",
+    "sentiment": "neutral",
+    "action_taken": "Provided extra batteries at no charge to the customer.",
+    "resolved_date": "2024-10-09",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C006",
+    "product_id": "P019",
+    "feedback": "Drone's camera quality is great but the drone is too noisy.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested using the drone in open spaces and offered a noise reduction kit.",
+    "resolved_date": "2024-10-10",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C007",
+    "product_id": "P021",
+    "feedback": "Love the fitness tracker, but the heart rate sensor is inaccurate.",
+    "sentiment": "negative",
+    "action_taken": "Replaced the faulty device and offered a complimentary fitness consultation.",
+    "resolved_date": "2024-10-11",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C008",
+    "product_id": "P021",
+    "feedback": "The fitness tracker works well but the screen is hard to read outdoors in direct sunlight.",
+    "sentiment": "neutral",
+    "action_taken": "Offered a screen protector to reduce glare.",
+    "resolved_date": "2024-10-12",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C009",
+    "product_id": "P004",
+    "feedback": "The gaming monitor arrived with dead pixels, very frustrating.",
+    "sentiment": "negative",
+    "action_taken": "Issued a replacement monitor and initiated the return process for the faulty one.",
+    "resolved_date": "2024-10-13",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C010",
+    "product_id": "P004",
+    "feedback": "The gaming monitor's color calibration is off. It's hard to get accurate colors.",
+    "sentiment": "neutral",
+    "action_taken": "Provided color calibration settings and offered a 10% discount on future purchases.",
+    "resolved_date": "2024-10-14",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C011",
+    "product_id": "P014",
+    "feedback": "The graphic tablet works fine, but the stylus is uncomfortable to use for long hours.",
+    "sentiment": "neutral",
+    "action_taken": "Offered a free ergonomic stylus replacement.",
+    "resolved_date": "2024-10-15",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C012",
+    "product_id": "P014",
+    "feedback": "The tablet worked well, but the pressure sensitivity of the stylus is inconsistent.",
+    "sentiment": "negative",
+    "action_taken": "Replaced the stylus and adjusted settings for better responsiveness.",
+    "resolved_date": "2024-10-16",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C013",
+    "product_id": "P028",
+    "feedback": "Laptop battery drains too fast even on light usage.",
+    "sentiment": "negative",
+    "action_taken": "Replaced battery and offered tips for battery maintenance.",
+    "resolved_date": "2024-10-17",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C014",
+    "product_id": "P028",
+    "feedback": "The laptop is running slower than expected after a few months of use.",
+    "sentiment": "neutral",
+    "action_taken": "Recommending software cleanup and memory optimization tools.",
+    "resolved_date": "2024-10-18",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C015",
+    "product_id": "P015",
+    "feedback": "The tablet freezes and restarts unexpectedly, very annoying.",
+    "sentiment": "negative",
+    "action_taken": "Replaced the tablet and performed a system update to prevent future crashes.",
+    "resolved_date": "2024-10-19",
+    "escalation_level": "High"
+  },
+  {
+    "complaint_id": "C016",
+    "product_id": "P015",
+    "feedback": "I am happy with the tablet, but the screen scratches easily.",
+    "sentiment": "neutral",
+    "action_taken": "Offered a free screen protector and gave a 15% discount on future accessories.",
+    "resolved_date": "2024-10-20",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C017",
+    "product_id": "P134",
+    "feedback": "The wireless earbuds keep disconnecting when I’m on a call.",
+    "sentiment": "negative",
+    "action_taken": "Sent a replacement set and provided troubleshooting steps.",
+    "resolved_date": "2024-10-21",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C018",
+    "product_id": "P134",
+    "feedback": "Great sound quality, but they don’t fit well in my ears.",
+    "sentiment": "neutral",
+    "action_taken": "Offered different ear tips for a better fit.",
+    "resolved_date": "2024-10-22",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C019",
+    "product_id": "P132",
+    "feedback": "The wireless mouse is responsive but the scroll wheel is loose and feels cheap.",
+    "sentiment": "negative",
+    "action_taken": "Sent a replacement mouse and collected the defective one.",
+    "resolved_date": "2024-10-23",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C020",
+    "product_id": "P132",
+    "feedback": "The wireless mouse is good, but the signal drops intermittently.",
+    "sentiment": "neutral",
+    "action_taken": "Offered a firmware update and suggested testing on another USB port.",
+    "resolved_date": "2024-10-24",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C021",
+    "product_id": "P070",
+    "feedback": "The wireless security camera works well, but the video feed has frequent lags.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested a firmware update and recommended adjusting the Wi-Fi router placement.",
+    "resolved_date": "2024-10-25",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C022",
+    "product_id": "P070",
+    "feedback": "The camera quality is great, but I am having trouble with motion detection settings.",
+    "sentiment": "negative",
+    "action_taken": "Provided a tutorial video and troubleshooting steps for motion detection.",
+    "resolved_date": "2024-10-26",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C023",
+    "product_id": "P056",
+    "feedback": "The laptop stand is sturdy but the rubber feet don’t grip well, causing it to slide.",
+    "sentiment": "neutral",
+    "action_taken": "Sent a new set of anti-slip pads for the stand.",
+    "resolved_date": "2024-10-27",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C024",
+    "product_id": "P056",
+    "feedback": "The laptop stand doesn’t have enough tilt adjustment. It’s too rigid.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested using a separate adjustable riser and offered a 10% discount on next purchase.",
+    "resolved_date": "2024-10-28",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C025",
+    "product_id": "P073",
+    "feedback": "The noise-canceling headset has great sound, but the ear cups are uncomfortable after long use.",
+    "sentiment": "neutral",
+    "action_taken": "Offered an upgraded model with memory foam ear pads.",
+    "resolved_date": "2024-10-29",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C026",
+    "product_id": "P073",
+    "feedback": "The noise-canceling feature works well, but there’s a slight buzzing sound when idle.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested firmware update and checked for hardware issues.",
+    "resolved_date": "2024-10-30",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C027",
+    "product_id": "P047",
+    "feedback": "The smart thermostat works fine, but it doesn't sync with my smart home system.",
+    "sentiment": "negative",
+    "action_taken": "Provided troubleshooting steps and ensured compatibility with the customer's system.",
+    "resolved_date": "2024-10-31",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C028",
+    "product_id": "P047",
+    "feedback": "The thermostat works well, but the app is difficult to navigate.",
+    "sentiment": "neutral",
+    "action_taken": "Provided app tutorial and submitted feedback to the app development team for improvements.",
+    "resolved_date": "2024-11-01",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C029",
+    "product_id": "P030",
+    "feedback": "The electric toothbrush doesn't charge well. It’s been malfunctioning.",
+    "sentiment": "negative",
+    "action_taken": "Sent a new charging station and offered a full refund.",
+    "resolved_date": "2024-11-02",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C030",
+    "product_id": "P030",
+    "feedback": "The toothbrush works great but I wish it had a longer battery life.",
+    "sentiment": "neutral",
+    "action_taken": "Recommended brushing in 2-minute intervals to prolong battery life.",
+    "resolved_date": "2024-11-03",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C031",
+    "product_id": "P016",
+    "feedback": "The external hard drive is slower than expected for transferring large files.",
+    "sentiment": "negative",
+    "action_taken": "Replaced with a faster external hard drive model and refunded shipping costs.",
+    "resolved_date": "2024-11-04",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C032",
+    "product_id": "P016",
+    "feedback": "Great storage space but the hard drive has connection issues on some computers.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested updating USB drivers and offered technical support.",
+    "resolved_date": "2024-11-05",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C033",
+    "product_id": "P011",
+    "feedback": "The HDMI cable is good, but it doesn't support 4K resolution as claimed.",
+    "sentiment": "negative",
+    "action_taken": "Sent a higher-quality cable and refunded the purchase.",
+    "resolved_date": "2024-11-06",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C034",
+    "product_id": "P011",
+    "feedback": "The HDMI cable works fine, but it gets loose from the port frequently.",
+    "sentiment": "neutral",
+    "action_taken": "Sent a new cable with a more secure connector design.",
+    "resolved_date": "2024-11-07",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C035",
+    "product_id": "P024",
+    "feedback": "The smart home hub is easy to set up, but it frequently disconnects from devices.",
+    "sentiment": "negative",
+    "action_taken": "Provided firmware updates and troubleshooting steps for reconnecting devices.",
+    "resolved_date": "2024-11-08",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C036",
+    "product_id": "P024",
+    "feedback": "Smart home hub works well, but some voice commands aren't recognized.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested using clearer voice commands and offered a free app update.",
+    "resolved_date": "2024-11-09",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C037",
+    "product_id": "P064",
+    "feedback": "The smart light bulb works, but the color changes are too slow.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested setting a faster response time in the app settings.",
+    "resolved_date": "2024-11-10",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C038",
+    "product_id": "P064",
+    "feedback": "Smart light bulb is great but doesn't connect to my home Wi-Fi sometimes.",
+    "sentiment": "negative",
+    "action_taken": "Provided a connection troubleshooting guide and sent a replacement bulb.",
+    "resolved_date": "2024-11-11",
+    "escalation_level": "Medium"
+  },
+  {
+    "complaint_id": "C039",
+    "product_id": "P037",
+    "feedback": "The smartphone's camera is great, but the battery drains quickly during heavy use.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested using battery saver mode and offered a battery case for purchase.",
+    "resolved_date": "2024-11-12",
+    "escalation_level": "Low"
+  },
+  {
+    "complaint_id": "C040",
+    "product_id": "P037",
+    "feedback": "The smartphone is great overall, but it gets really hot when using certain apps.",
+    "sentiment": "neutral",
+    "action_taken": "Suggested updating apps and performing a system cleanup to reduce overheating.",
+    "resolved_date": "2024-11-13",
+    "escalation_level": "Low"
+  }
+]

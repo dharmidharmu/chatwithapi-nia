@@ -1,0 +1,305 @@
+[
+    {
+      "sales_period": "Winter Sale 2010",
+      "total_sales": 50000,
+      "quantity_sold": 1000,
+      "offer_description": "50% off on select products for the Winter Sale!",
+      "discount_percentage": 50,
+      "sale_date": "2010-12-15",
+      "sales_performance": "Strong sales with a significant surge during the last 3 days of the sale period.",
+      "customer_behavior": "Customers were primarily interested in tech gadgets and winter apparel. High volume of purchases from existing customers."
+    },
+    {
+      "sales_period": "Summer Sale 2010",
+      "total_sales": 35000,
+      "quantity_sold": 800,
+      "offer_description": "Up to 30% off on summer gadgets and outdoor gear!",
+      "discount_percentage": 30,
+      "sale_date": "2010-07-10",
+      "sales_performance": "Sales were steady but not as high as the Winter Sale. Outdoor product sales performed well.",
+      "customer_behavior": "New customers showed interest in fitness equipment and outdoor gadgets. Higher engagement on social media platforms."
+    },
+    {
+      "sales_period": "Winter Sale 2011",
+      "total_sales": 75000,
+      "quantity_sold": 1500,
+      "offer_description": "Buy one, get one free on selected tech products during the Winter Sale!",
+      "discount_percentage": 0,
+      "sale_date": "2011-12-20",
+      "sales_performance": "Record-breaking sales compared to the previous year. The BOGO offer was a huge hit.",
+      "customer_behavior": "Customers took advantage of the BOGO offer, with a marked increase in tech product purchases."
+    },
+    {
+      "sales_period": "Summer Sale 2011",
+      "total_sales": 40000,
+      "quantity_sold": 900,
+      "offer_description": "Summer Sale! Get 20% off on all fitness and outdoor products!",
+      "discount_percentage": 20,
+      "sale_date": "2011-07-15",
+      "sales_performance": "Solid performance with a slight increase in fitness product sales.",
+      "customer_behavior": "There was an uptick in purchases from fitness-conscious customers and those preparing for summer travel."
+    },
+    {
+      "sales_period": "Winter Sale 2012",
+      "total_sales": 85000,
+      "quantity_sold": 1600,
+      "offer_description": "Holiday special: 40% off on selected smart devices and accessories.",
+      "discount_percentage": 40,
+      "sale_date": "2012-12-18",
+      "sales_performance": "Exceeded expectations with strong sales in smart devices.",
+      "customer_behavior": "Returning customers were focused on upgrading to the latest tech, especially in smartphones and smartwatches."
+    },
+    {
+      "sales_period": "Summer Sale 2012",
+      "total_sales": 45000,
+      "quantity_sold": 1000,
+      "offer_description": "Get 25% off on outdoor gadgets and portable electronics!",
+      "discount_percentage": 25,
+      "sale_date": "2012-06-30",
+      "sales_performance": "Moderate success, with portable electronics being the best-sellers.",
+      "customer_behavior": "Outdoor enthusiasts and tech-savvy individuals led the purchases, with a lot of new customers."
+    },
+    {
+      "sales_period": "Winter Sale 2013",
+      "total_sales": 90000,
+      "quantity_sold": 1800,
+      "offer_description": "Year-end clearance: Up to 60% off on selected winter gadgets and appliances.",
+      "discount_percentage": 60,
+      "sale_date": "2013-12-10",
+      "sales_performance": "Exceeded the sales target significantly with a sharp rise in high-ticket item sales.",
+      "customer_behavior": "Customers focused on high-value electronics and home appliances, taking advantage of the steep discounts."
+    },
+    {
+      "sales_period": "Summer Sale 2013",
+      "total_sales": 48000,
+      "quantity_sold": 950,
+      "offer_description": "Exclusive 15% off on all fitness trackers and sports watches!",
+      "discount_percentage": 15,
+      "sale_date": "2013-07-05",
+      "sales_performance": "Average performance with a slight increase in fitness-related purchases.",
+      "customer_behavior": "Fitness enthusiasts and health-conscious individuals led the sales, while summer vacation-related products showed moderate interest."
+    },
+    {
+      "sales_period": "Winter Sale 2014",
+      "total_sales": 95000,
+      "quantity_sold": 1900,
+      "offer_description": "Black Friday deals: 50% off on selected tech products!",
+      "discount_percentage": 50,
+      "sale_date": "2014-11-28",
+      "sales_performance": "Strong sales performance, especially during the weekend.",
+      "customer_behavior": "Existing customers dominated the sales, with new customers seeking tech gadgets and seasonal offers."
+    },
+    {
+      "sales_period": "Summer Sale 2014",
+      "total_sales": 51000,
+      "quantity_sold": 1100,
+      "offer_description": "Up to 30% off on summer gear, including drones and cameras.",
+      "discount_percentage": 30,
+      "sale_date": "2014-06-25",
+      "sales_performance": "Moderate success, with drones and cameras being popular.",
+      "customer_behavior": "Tech enthusiasts and travelers showed strong interest in cameras and drones for their summer adventures."
+    },
+    {
+      "sales_period": "Winter Sale 2015",
+      "total_sales": 100000,
+      "quantity_sold": 2000,
+      "offer_description": "Cyber Monday Special: 55% off on all gaming and tech accessories!",
+      "discount_percentage": 55,
+      "sale_date": "2015-11-30",
+      "sales_performance": "Massive sales surge during Cyber Monday.",
+      "customer_behavior": "Gaming enthusiasts and tech-savvy individuals were the major customers, buying high-end accessories and gaming consoles."
+    },
+    {
+      "sales_period": "Summer Sale 2015",
+      "total_sales": 53000,
+      "quantity_sold": 1150,
+      "offer_description": "25% off on all portable electronics and camping gear!",
+      "discount_percentage": 25,
+      "sale_date": "2015-06-28",
+      "sales_performance": "Strong performance in outdoor and portable electronics.",
+      "customer_behavior": "Travelers and outdoor enthusiasts were the major consumers of portable electronics and camping gear."
+    },
+    {
+      "sales_period": "Winter Sale 2016",
+      "total_sales": 110000,
+      "quantity_sold": 2200,
+      "offer_description": "End of Year Clearance: 40% off on all electronics and home appliances!",
+      "discount_percentage": 40,
+      "sale_date": "2016-12-20",
+      "sales_performance": "Outstanding performance with heavy sales in electronics and home products.",
+      "customer_behavior": "Existing customers made large-ticket purchases, especially on electronics and home devices."
+    },
+    {
+      "sales_period": "Summer Sale 2016",
+      "total_sales": 56000,
+      "quantity_sold": 1200,
+      "offer_description": "Get 20% off on fitness trackers and wireless earbuds!",
+      "discount_percentage": 20,
+      "sale_date": "2016-07-10",
+      "sales_performance": "Decent performance with fitness products leading the sales.",
+      "customer_behavior": "Health-conscious customers and fitness enthusiasts made up the majority of the purchases."
+    },
+    {
+      "sales_period": "Winter Sale 2017",
+      "total_sales": 115000,
+      "quantity_sold": 2300,
+      "offer_description": "New Year Sale: Up to 50% off on selected electronics and winter clothing!",
+      "discount_percentage": 50,
+      "sale_date": "2017-12-15",
+      "sales_performance": "Excellent performance with a high volume of high-value electronics sold.",
+      "customer_behavior": "Tech-focused customers and winter clothing shoppers dominated the sales."
+    },
+    {
+      "sales_period": "Summer Sale 2017",
+      "total_sales": 60000,
+      "quantity_sold": 1300,
+      "offer_description": "Up to 30% off on fitness products, wearables, and sports accessories!",
+      "discount_percentage": 30,
+      "sale_date": "2017-06-25",
+      "sales_performance": "Solid growth in wearable tech and fitness products.",
+      "customer_behavior": "Health-conscious and fitness-focused individuals showed a spike in purchasing behavior."
+    },
+    {
+      "sales_period": "Winter Sale 2018",
+      "total_sales": 120000,
+      "quantity_sold": 2500,
+      "offer_description": "Exclusive deals: 40% off on selected smart devices and gaming consoles!",
+      "discount_percentage": 40,
+      "sale_date": "2018-12-10",
+      "sales_performance": "Increased sales in the gaming and smart device categories.",
+      "customer_behavior": "Gaming enthusiasts and tech fans were the primary buyers during this sale."
+    },
+    {
+      "sales_period": "Summer Sale 2018",
+      "total_sales": 63000,
+      "quantity_sold": 1350,
+      "offer_description": "Summer Sale: 25% off on drones, cameras, and portable chargers!",
+      "discount_percentage": 25,
+      "sale_date": "2018-06-20",
+      "sales_performance": "Strong sales in drones and outdoor tech gadgets.",
+      "customer_behavior": "Outdoor enthusiasts and travelers made up a large portion of the purchases."
+    },
+    {
+      "sales_period": "Winter Sale 2019",
+      "total_sales": 125000,
+      "quantity_sold": 2600,
+      "offer_description": "Christmas Special: 45% off on all gaming and tech accessories!",
+      "discount_percentage": 45,
+      "sale_date": "2019-12-15",
+      "sales_performance": "Record-breaking sales with a significant rise in high-value items.",
+      "customer_behavior": "Tech enthusiasts and early gift shoppers drove high-end tech purchases."
+    },
+    {
+      "sales_period": "Summer Sale 2019",
+      "total_sales": 65000,
+      "quantity_sold": 1400,
+      "offer_description": "Get 30% off on fitness trackers, smartwatches, and sports gear!",
+      "discount_percentage": 30,
+      "sale_date": "2019-07-10",
+      "sales_performance": "Strong sales in fitness and outdoor gear during peak season.",
+      "customer_behavior": "Fitness-conscious customers dominated the sale, with sports gear and wearables seeing the highest interest."
+    },
+
+    {
+        "sales_period": "Winter Sale 2020",
+        "total_sales": 130000,
+        "quantity_sold": 2800,
+        "offer_description": "Holiday Season Sale: 50% off on selected electronics and home appliances!",
+        "discount_percentage": 50,
+        "sale_date": "2020-12-15",
+        "sales_performance": "Exceptional performance with a high volume of electronics sales despite the pandemic.",
+        "customer_behavior": "Tech enthusiasts and home appliance buyers dominated the sales. Many first-time online shoppers."
+    },
+    {
+        "sales_period": "Summer Sale 2020",
+        "total_sales": 70000,
+        "quantity_sold": 1500,
+        "offer_description": "Get 25% off on outdoor tech gadgets, fitness trackers, and home workout equipment.",
+        "discount_percentage": 25,
+        "sale_date": "2020-06-30",
+        "sales_performance": "Moderate sales due to the pandemic, but outdoor gadgets and fitness trackers sold well.",
+        "customer_behavior": "Fitness-conscious individuals and outdoor adventurers led the sales, with an increased interest in home workout products."
+    },
+    {
+        "sales_period": "Winter Sale 2021",
+        "total_sales": 140000,
+        "quantity_sold": 3000,
+        "offer_description": "End of Year Clearance: Up to 60% off on gaming consoles, smart devices, and accessories.",
+        "discount_percentage": 60,
+        "sale_date": "2021-12-20",
+        "sales_performance": "Record-breaking sales, especially in gaming consoles and smart home products.",
+        "customer_behavior": "Gaming enthusiasts and smart home tech buyers led the purchase surge. High demand for gadgets as gifts."
+    },
+    {
+        "sales_period": "Summer Sale 2021",
+        "total_sales": 75000,
+        "quantity_sold": 1600,
+        "offer_description": "Summer Flash Sale: 30% off on fitness gear, wearables, and outdoor tech!",
+        "discount_percentage": 30,
+        "sale_date": "2021-07-05",
+        "sales_performance": "Strong sales in outdoor and fitness products with a solid increase in wearable tech.",
+        "customer_behavior": "Health-focused individuals and outdoor enthusiasts led the purchase behavior, especially in wearables and fitness trackers."
+    },
+    {
+        "sales_period": "Winter Sale 2022",
+        "total_sales": 150000,
+        "quantity_sold": 3200,
+        "offer_description": "New Year Mega Sale: 45% off on tech gadgets, gaming, and home appliances.",
+        "discount_percentage": 45,
+        "sale_date": "2022-12-10",
+        "sales_performance": "Impressive performance, surpassing sales targets, especially in tech and gaming.",
+        "customer_behavior": "Tech lovers, gamers, and home appliance buyers drove the sales, with a huge increase in online shopping."
+    },
+    {
+        "sales_period": "Summer Sale 2022",
+        "total_sales": 80000,
+        "quantity_sold": 1700,
+        "offer_description": "Exclusive Summer Offers: 35% off on drones, cameras, and portable gadgets!",
+        "discount_percentage": 35,
+        "sale_date": "2022-06-15",
+        "sales_performance": "Strong sales, particularly in drones and portable gadgets, with steady growth in tech items.",
+        "customer_behavior": "Tech enthusiasts and travelers bought drones and cameras in large quantities for vacation and outdoor activities."
+    },
+    {
+        "sales_period": "Winter Sale 2023",
+        "total_sales": 160000,
+        "quantity_sold": 3500,
+        "offer_description": "Christmas Sale: 50% off on gaming, home electronics, and smart gadgets.",
+        "discount_percentage": 50,
+        "sale_date": "2023-12-12",
+        "sales_performance": "Outstanding sales performance, with gaming products and smart gadgets leading the charge.",
+        "customer_behavior": "Existing customers dominated the sales, especially in gaming consoles and smart home gadgets for Christmas gifts."
+    },
+    {
+        "sales_period": "Summer Sale 2023",
+        "total_sales": 90000,
+        "quantity_sold": 1800,
+        "offer_description": "Summer Discount: 30% off on outdoor tech, cameras, and fitness products!",
+        "discount_percentage": 30,
+        "sale_date": "2023-07-01",
+        "sales_performance": "Strong sales in outdoor tech and cameras, with fitness products showing moderate interest.",
+        "customer_behavior": "Outdoor enthusiasts and fitness-conscious individuals bought heavily during the sale, particularly in cameras and fitness tech."
+    },
+    {
+        "sales_period": "Winter Sale 2024",
+        "total_sales": 170000,
+        "quantity_sold": 3800,
+        "offer_description": "Holiday Season Blowout: 60% off on gaming consoles, smart devices, and home entertainment systems.",
+        "discount_percentage": 60,
+        "sale_date": "2024-12-05",
+        "sales_performance": "Record sales performance, especially in gaming consoles and smart home products.",
+        "customer_behavior": "Gamers, tech enthusiasts, and early holiday shoppers drove the surge in sales, particularly in high-value electronics."
+    },
+    {
+        "sales_period": "Summer Sale 2024",
+        "total_sales": 95000,
+        "quantity_sold": 1900,
+        "offer_description": "Exclusive 30% off on smartwatches, fitness trackers, and portable electronics!",
+        "discount_percentage": 30,
+        "sale_date": "2024-06-10",
+        "sales_performance": "Strong sales performance, especially in smartwatches and fitness trackers.",
+        "customer_behavior": "Fitness enthusiasts, health-conscious customers, and tech lovers were the primary drivers of the sale."
+    }
+]
+      
+  

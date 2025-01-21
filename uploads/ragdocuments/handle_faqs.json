@@ -1,0 +1,438 @@
+[
+    {
+      "faq_question": "What is the resolution of the 4K Webcam?",
+      "faq_answer": "The 4K Webcam supports a resolution of 3840x2160 pixels, providing ultra-high-definition video quality for streaming and video calls.",
+      "faq_topic": "Product Specifications",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Is the 4K Webcam compatible with both Windows and macOS?",
+      "faq_answer": "Yes, the 4K Webcam is compatible with both Windows and macOS operating systems. Drivers for both platforms are included.",
+      "faq_topic": "Product Compatibility",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Can the Digital Camera be used for live streaming?",
+      "faq_answer": "Yes, the Digital Camera has a live streaming mode that allows you to stream directly to platforms like YouTube and Twitch with a USB connection.",
+      "faq_topic": "Live Streaming",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Does the Digital Camera include a memory card?",
+      "faq_answer": "No, the Digital Camera does not come with a memory card. We recommend purchasing a microSD card with at least 32GB of storage for optimal performance.",
+      "faq_topic": "Accessories",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "How long does the battery last on the Drone with Camera?",
+      "faq_answer": "The Drone with Camera offers a battery life of up to 30 minutes on a full charge, depending on usage conditions like wind and video recording.",
+      "faq_topic": "Battery Life",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Is the Drone with Camera suitable for beginners?",
+      "faq_answer": "Yes, the Drone with Camera is designed for both beginners and advanced users. It features an automatic stabilization system, GPS, and one-touch takeoff/landing.",
+      "faq_topic": "User Level",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "What is the storage capacity of the Fitness Tracker?",
+      "faq_answer": "The Fitness Tracker can store up to 7 days of activity data, including heart rate, steps, and calories burned.",
+      "faq_topic": "Product Specifications",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Is the Fitness Tracker waterproof?",
+      "faq_answer": "Yes, the Fitness Tracker is water-resistant up to 50 meters, making it suitable for swimming and other water activities.",
+      "faq_topic": "Water Resistance",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Does the Gaming Monitor support G-Sync?",
+      "faq_answer": "Yes, the Gaming Monitor supports NVIDIA G-Sync for smoother gameplay by reducing screen tearing and input lag.",
+      "faq_topic": "Gaming Features",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "What are the refresh rate and response time of the Gaming Monitor?",
+      "faq_answer": "The Gaming Monitor offers a 144Hz refresh rate and a 1ms response time, ensuring smooth and fast-paced gaming experiences.",
+      "faq_topic": "Display Specifications",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Can I connect the Gaming Monitor to my console?",
+      "faq_answer": "Yes, the Gaming Monitor is compatible with most gaming consoles, including PlayStation, Xbox, and Nintendo Switch.",
+      "faq_topic": "Compatibility",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "How do I install the Graphic Tablet?",
+      "faq_answer": "Simply plug the Graphic Tablet into your computer via USB, then install the provided driver software to get started.",
+      "faq_topic": "Setup Instructions",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Does the Graphic Tablet come with drawing software?",
+      "faq_answer": "Yes, the Graphic Tablet includes a free 1-year license for the drawing software 'Corel Painter Essentials'.",
+      "faq_topic": "Software",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "What types of connections are supported by the Headphones?",
+      "faq_answer": "The Headphones support both wired (3.5mm jack) and wireless (Bluetooth 5.0) connections.",
+      "faq_topic": "Connectivity",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Are the Headphones noise-canceling?",
+      "faq_answer": "Yes, the Headphones feature active noise cancellation, which can be turned on or off depending on your environment.",
+      "faq_topic": "Noise Cancellation",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Does the Laptop come with a pre-installed operating system?",
+      "faq_answer": "Yes, the Laptop comes with Windows 11 pre-installed, including all necessary drivers and updates.",
+      "faq_topic": "Operating System",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Can I upgrade the RAM in the Laptop?",
+      "faq_answer": "Yes, the Laptop has 2 RAM slots and is upgradable up to 32GB of DDR4 memory.",
+      "faq_topic": "Hardware Upgrade",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "What is the screen size of the Tablet?",
+      "faq_answer": "The Tablet has a 10.5-inch Full HD display, providing a sharp and clear viewing experience.",
+      "faq_topic": "Display Specifications",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Does the Tablet support cellular connectivity?",
+      "faq_answer": "Yes, the Tablet supports 4G LTE cellular connectivity with a SIM card slot, so you can stay connected on the go.",
+      "faq_topic": "Connectivity",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Can I use the Wireless Earbuds with multiple devices at the same time?",
+      "faq_answer": "Yes, the Wireless Earbuds support multi-point connectivity, allowing you to pair them with two devices simultaneously.",
+      "faq_topic": "Connectivity",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "How do I reset the Wireless Earbuds?",
+      "faq_answer": "To reset the Wireless Earbuds, press and hold both the left and right earbud buttons for 10 seconds until the LED flashes red and blue.",
+      "faq_topic": "Troubleshooting",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Does the Wireless Mouse require a battery replacement?",
+      "faq_answer": "The Wireless Mouse uses a rechargeable battery, and can be charged via USB-C. No need for regular battery replacements.",
+      "faq_topic": "Power and Charging",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Is the Wireless Security Camera compatible with Alexa or Google Assistant?",
+      "faq_answer": "Yes, the Wireless Security Camera is compatible with both Alexa and Google Assistant, allowing for voice control and integration into your smart home.",
+      "faq_topic": "Smart Home Integration",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "How can I mount the Wireless Security Camera?",
+      "faq_answer": "The Wireless Security Camera comes with a wall mount bracket and screws for easy installation on walls or ceilings.",
+      "faq_topic": "Installation",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Does the Laptop Stand fit all laptop sizes?",
+      "faq_answer": "The Laptop Stand is adjustable and can support laptops from 11 to 17 inches in size.",
+      "faq_topic": "Product Specifications",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+      "faq_question": "Is the Laptop Stand portable?",
+      "faq_answer": "Yes, the Laptop Stand is foldable and lightweight, making it easy to carry for travel or on-the-go use.",
+      "faq_topic": "Portability",
+      "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    }
+    ,
+    {
+        "faq_question": "What is the battery life of the Noise-Cancelling Headset?",
+        "faq_answer": "The Noise-Cancelling Headset offers up to 20 hours of continuous playback time with active noise cancellation turned on.",
+        "faq_topic": "Battery Life",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Can I use the Noise-Cancelling Headset for phone calls?",
+        "faq_answer": "Yes, the Noise-Cancelling Headset is equipped with a built-in microphone, making it suitable for clear phone calls and video conferencing.",
+        "faq_topic": "Features",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Does the Smart Thermostat work with other smart home devices?",
+        "faq_answer": "Yes, the Smart Thermostat is compatible with other smart home devices, including Alexa, Google Assistant, and other Z-Wave smart hubs.",
+        "faq_topic": "Smart Home Integration",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "How do I install the Smart Thermostat?",
+        "faq_answer": "The Smart Thermostat can be installed easily by replacing your old thermostat. It connects via Wi-Fi and can be set up using the mobile app.",
+        "faq_topic": "Installation",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "What is the warranty period for the Electric Toothbrush?",
+        "faq_answer": "The Electric Toothbrush comes with a 2-year warranty, covering any manufacturing defects under normal usage.",
+        "faq_topic": "Warranty",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Does the Electric Toothbrush have multiple cleaning modes?",
+        "faq_answer": "Yes, the Electric Toothbrush offers 3 cleaning modes: Daily Clean, Sensitive, and Whitening, which can be switched easily during brushing.",
+        "faq_topic": "Features",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "What is the transfer speed of the External Hard Drive 2TB?",
+        "faq_answer": "The External Hard Drive 2TB supports data transfer speeds of up to 100 MB/s, making it ideal for storing large files quickly.",
+        "faq_topic": "Data Transfer",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Is the External Hard Drive 2TB compatible with Mac?",
+        "faq_answer": "Yes, the External Hard Drive 2TB is compatible with both Windows and macOS devices, with no need for additional software.",
+        "faq_topic": "Compatibility",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Can the HDMI Cable 6ft support 4K resolution?",
+        "faq_answer": "Yes, the HDMI Cable 6ft supports 4K Ultra HD resolution, as well as 3D and high-definition audio formats.",
+        "faq_topic": "Product Specifications",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Is the HDMI Cable 6ft suitable for gaming consoles?",
+        "faq_answer": "Yes, the HDMI Cable 6ft is ideal for gaming consoles, providing stable 4K video output and enhanced sound for a superior gaming experience.",
+        "faq_topic": "Compatibility",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Can the Mechanical Keyboard be used for gaming?",
+        "faq_answer": "Yes, the Mechanical Keyboard is specifically designed for gaming, featuring high-speed response time, anti-ghosting, and customizable RGB lighting.",
+        "faq_topic": "Gaming Features",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Does the Mechanical Keyboard have programmable keys?",
+        "faq_answer": "Yes, the Mechanical Keyboard has programmable keys that can be customized using the included software for specific gaming macros or shortcuts.",
+        "faq_topic": "Customization",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "What is the storage capacity of the Portable SSD 1TB?",
+        "faq_answer": "The Portable SSD 1TB offers 1TB of storage space, ideal for storing large files, high-definition videos, and gaming data.",
+        "faq_topic": "Storage",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Does the Portable SSD 1TB require external power?",
+        "faq_answer": "No, the Portable SSD 1TB is powered through the USB connection, so no external power source is needed.",
+        "faq_topic": "Power",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "What is the Smart Home Hub compatible with?",
+        "faq_answer": "The Smart Home Hub is compatible with a wide range of smart home devices including lights, thermostats, cameras, and locks from brands like Philips Hue, Nest, and Ring.",
+        "faq_topic": "Smart Home Integration",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Does the Smart Home Hub support voice commands?",
+        "faq_answer": "Yes, the Smart Home Hub works with both Amazon Alexa and Google Assistant for voice command functionality.",
+        "faq_topic": "Voice Control",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "What type of lighting is supported by the Smart Light Bulb?",
+        "faq_answer": "The Smart Light Bulb supports both warm white and cool white lighting, with customizable brightness and color temperature adjustments.",
+        "faq_topic": "Lighting",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Can the Smart Light Bulb be controlled remotely?",
+        "faq_answer": "Yes, the Smart Light Bulb can be controlled remotely via a mobile app, even when you're not at home.",
+        "faq_topic": "Remote Control",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Is the Smartphone compatible with wireless charging?",
+        "faq_answer": "Yes, the Smartphone supports wireless charging and is compatible with Qi-certified charging pads.",
+        "faq_topic": "Charging",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Can I expand the storage of the Smartphone?",
+        "faq_answer": "Yes, the Smartphone has a microSD card slot that supports expansion up to 1TB of additional storage.",
+        "faq_topic": "Storage",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Is the Digital Camera good for low-light photography?",
+        "faq_answer": "Yes, the Digital Camera features a large aperture and advanced image processing technology, making it suitable for low-light photography.",
+        "faq_topic": "Low-Light Performance",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "How do I transfer photos from the Digital Camera to my computer?",
+        "faq_answer": "You can transfer photos from the Digital Camera to your computer using the included USB cable or wirelessly via Wi-Fi.",
+        "faq_topic": "Data Transfer",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Can I use the Fitness Tracker for swimming?",
+        "faq_answer": "Yes, the Fitness Tracker is waterproof up to 50 meters, making it suitable for swimming and other water activities.",
+        "faq_topic": "Water Resistance",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Does the Gaming Headset come with a microphone?",
+        "faq_answer": "Yes, the Gaming Headset includes a high-quality microphone for in-game communication and voice chats.",
+        "faq_topic": "Microphone",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "How do I connect the Gaming Headset to my console?",
+        "faq_answer": "The Gaming Headset can be connected to your console via a 3.5mm jack or USB port, depending on the model and the console compatibility.",
+        "faq_topic": "Connectivity",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "Does the Air Purifier filter pet dander?",
+        "faq_answer": "Yes, the Air Purifier includes a HEPA filter that effectively captures pet dander, dust, and other allergens from the air.",
+        "faq_topic": "Air Quality",
+        "support_contact": "CUSTOMER_CARE@OURECOMMERCE.COM"
+    },
+    {
+        "faq_question": "How can I track my order?",
+        "faq_answer": "You can track your order by visiting the 'Order History' section in your account or by using the tracking number provided in the shipping confirmation email.",
+        "faq_topic": "Order Tracking",
+        "support_contact": "For further assistance, please contact us at support@ourecommerce.com."
+    },
+    {
+        "faq_question": "How do I return an item?",
+        "faq_answer": "To return an item, log into your account, go to 'My Orders', and select the item you'd like to return. Follow the prompts to initiate the return process.",
+        "faq_topic": "Returns",
+        "support_contact": "For additional help, contact our returns team at returns@ourecommerce.com."
+    },
+    {
+        "faq_question": "Can I change my delivery address after placing an order?",
+        "faq_answer": "If your order hasn't been shipped yet, you can update your delivery address by contacting our customer support team.",
+        "faq_topic": "Order Modifications",
+        "support_contact": "Please reach us at support@ourecommerce.com for assistance."
+    },
+    {
+        "faq_question": "How do I apply a coupon code?",
+        "faq_answer": "You can apply a coupon code during checkout by entering the code in the 'Promo Code' field before confirming your order.",
+        "faq_topic": "Discounts & Coupons",
+        "support_contact": "For coupon-related queries, please email us at coupons@ourecommerce.com."
+    },
+    {
+        "faq_question": "What payment methods do you accept?",
+        "faq_answer": "We accept all major credit and debit cards, PayPal, and other secure online payment methods.",
+        "faq_topic": "Payments",
+        "support_contact": "For payment-related questions, contact our billing team at billing@ourecommerce.com."
+    },
+    {
+        "faq_question": "How do I cancel my order?",
+        "faq_answer": "Orders can only be canceled before they are shipped. Please contact customer support immediately if you need to cancel your order.",
+        "faq_topic": "Order Modifications",
+        "support_contact": "For cancellations, reach us at support@ourecommerce.com."
+    },
+    {
+        "faq_question": "What is your return policy?",
+        "faq_answer": "We offer a 30-day return policy for most items. Items must be in their original condition and packaging for a full refund.",
+        "faq_topic": "Returns",
+        "support_contact": "For more details, please review our return policy at www.ourecommerce.com/returns."
+    },
+    {
+        "faq_question": "How long does shipping take?",
+        "faq_answer": "Shipping times vary by location and shipping method. Standard shipping typically takes 5-7 business days, while expedited options are available.",
+        "faq_topic": "Shipping",
+        "support_contact": "For specific delivery times, email us at shipping@ourecommerce.com."
+    },
+    {
+        "faq_question": "Do you offer international shipping?",
+        "faq_answer": "Yes, we offer international shipping to many countries. Shipping fees and delivery times vary by destination.",
+        "faq_topic": "Shipping",
+        "support_contact": "For international shipping inquiries, contact us at international@ourecommerce.com."
+    },
+    {
+        "faq_question": "Can I change the items in my order?",
+        "faq_answer": "Once an order is placed, you cannot change the items. You will need to cancel the order and place a new one.",
+        "faq_topic": "Order Modifications",
+        "support_contact": "For assistance with order changes, please email support@ourecommerce.com."
+    },
+    {
+        "faq_question": "How do I get a refund?",
+        "faq_answer": "Refunds are issued to the original payment method once we receive and process your return. It can take up to 7 business days for the refund to appear in your account.",
+        "faq_topic": "Returns & Refunds",
+        "support_contact": "For refund inquiries, please contact returns@ourecommerce.com."
+    },
+    {
+        "faq_question": "What happens if my order is damaged or defective?",
+        "faq_answer": "If your order arrives damaged or defective, please contact customer support immediately with photos of the issue, and we will provide a replacement or refund.",
+        "faq_topic": "Returns & Damaged Items",
+        "support_contact": "For damaged or defective items, email us at support@ourecommerce.com."
+    },
+    {
+        "faq_question": "How can I track my return?",
+        "faq_answer": "Once your return is processed, you will receive a notification with the status of your return, including any refunds or exchanges.",
+        "faq_topic": "Returns",
+        "support_contact": "For return tracking, please email returns@ourecommerce.com."
+    },
+    {
+        "faq_question": "Do you offer gift cards?",
+        "faq_answer": "Yes, we offer digital gift cards that can be purchased directly from our website. They are available in various denominations.",
+        "faq_topic": "Gift Cards",
+        "support_contact": "For gift card inquiries, contact us at giftcards@ourecommerce.com."
+    },
+    {
+        "faq_question": "Can I order without creating an account?",
+        "faq_answer": "Yes, you can order as a guest. However, creating an account allows you to track your orders and save your information for future purchases.",
+        "faq_topic": "Account",
+        "support_contact": "For account-related questions, email us at support@ourecommerce.com."
+    },
+    {
+        "faq_question": "How do I update my account information?",
+        "faq_answer": "To update your account information, log in to your account and go to 'Account Settings' to update your details.",
+        "faq_topic": "Account",
+        "support_contact": "For assistance, contact support@ourecommerce.com."
+    },
+    {
+        "faq_question": "Do you offer free shipping?",
+        "faq_answer": "We offer free standard shipping on orders over $50. For orders under $50, standard shipping fees apply.",
+        "faq_topic": "Shipping & Fees",
+        "support_contact": "For more shipping information, email us at shipping@ourecommerce.com."
+    },
+    {
+        "faq_question": "How can I contact customer support?",
+        "faq_answer": "You can contact customer support by emailing support@ourecommerce.com or by using the 'Contact Us' form on our website.",
+        "faq_topic": "Customer Support",
+        "support_contact": "Email: support@ourecommerce.com"
+    },
+    {
+        "faq_question": "How do I know if an item is in stock?",
+        "faq_answer": "Product availability is displayed on the product page. If an item is out of stock, you can sign up to receive a notification when it's back in stock.",
+        "faq_topic": "Product Availability",
+        "support_contact": "For stock inquiries, email us at stock@ourecommerce.com."
+    },
+    {
+        "faq_question": "Can I pre-order items that are out of stock?",
+        "faq_answer": "Yes, if a product is available for pre-order, it will be listed on the product page along with the expected release date.",
+        "faq_topic": "Pre-Orders",
+        "support_contact": "For pre-order inquiries, please email support@ourecommerce.com."
+    }
+]
+
+      
+  

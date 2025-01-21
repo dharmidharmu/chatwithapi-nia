@@ -1,0 +1,2 @@
+class LoggedUser:
+    name: str
