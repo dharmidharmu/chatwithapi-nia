@@ -154,7 +154,7 @@ async def store_to_blob_storage(uploadedImage: UploadFile = None):
             blob_name=file_name,
             account_key=AZURE_BLOB_STORAGE_ACCESS_KEY,
             permission=BlobSasPermissions(read=True),
-            expiry=datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=60)
+            expiry=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=60)
         )
 
         # Generate URL
