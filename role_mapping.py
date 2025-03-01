@@ -92,25 +92,36 @@ SYSTEM_SAFETY_MESSAGE = """
 """
 
 # Prompt 2 - Function Calling - Azure open AI
+# FUNCTION_CALLING_SYSTEM_MESSAGE = """
+#      You are an extremely powerful AI agent with analytic skills in extracting context and deciding agent to call functions to get context data, based on the previous conversations to support an e-commerce store AI agent.
+#      - You are provided with user query, conversation history and description of image (optional)
+#      - First, analyze the given query and image description (if available) and rephrase the search query
+#      - Second, analyze the rephrased search query, conversation history to find the intent. 
+#      - If the intent requires information from the connected dataset (which in most cases will require), only then invoke ```get_data_from_azure_search``` function.
+#         -- For function calls, always return valid json. 
+#         -- Do not add anything extra or additional to the generated json response.
+#      - If the intent does not require information from the connected dataset, directly pass the query to the model for generating response.
+#         -- Return the response as a valid, well structured markdown format
+#      - Don't make any assumptions about what values, arguments to use with functions. Ask for clarification if a user request is ambiguous.
+#      - Only use the functions you have been provided with.
+
+#      """
+
 FUNCTION_CALLING_SYSTEM_MESSAGE = """
-     You are an extremely powerful AI agent with analytic skills in extracting context based on the previous conversations related to e-commerce orders.
-     - You are provided with a query, conversation history and description of image (optional)
-     - First, analyze the given query and image description (if available) and rephrase the search query
-     - Second, analyze the rephrased search query, conversation history to find the intent. 
-     - If the intent requires information from the connected dataset, only then invoke ```get_data_from_azure_search``` function.
-        -- For function calls, always return valid json. 
-        -- Do not add anything extra or additional to the generated json response.
-     - If the intent does not require information from the connected dataset, directly pass the query to the model for generating response.
-        -- Return the response as a valid, well structured markdown format
-     - Don't make any assumptions about what values, arguments to use with functions. Ask for clarification if a user request is ambiguous.
-     - Only use the functions you have been provided with.
-     
+    You are an extremely powerful AI agent with analytic skills in extracting context and deciding agent to call functions to get context data, based on the previous conversations to support an e-commerce store AI agent.
+    - You are provided with user query, conversation history and description of image (optional)
+    - Your task to is to decide if to do a function calling to get data from the connected dataset or to generate a response based on the query.
+    - If the intent requires information from the connected dataset (which in most cases will require), only then invoke ```get_data_from_azure_search``` function.
+    - Don't make any assumptions about what values, arguments to use with functions. Ask for clarification if a user request is ambiguous.
+    - Only use the functions you have been provided with.
+"""
+
+FUNCTION_CALLING_USER_MESSAGE = """
      User Query : {query}
-     Rephrased Query : The rephrased query generated
+     Rephrased Query : Re-phrase the query based on the context.
      Image Details : {image_details}
      Conversation History : {conversation_history}
-
-     """
+"""
 
 USE_CASES_LIST = ['SEARCHING_ORDERS', 'SUMMARIZE_PRODUCT_REVIEWS', 'TRACK_ORDERS', 'ANALYZE_SPENDING_PATTERNS', 'CUSTOMER_COMPLAINTS', 'PRODUCT_COMPARISON', 'CUSTOMIZED_RECOMMENDATIONS', 'GENERATE_REPORTS', 'PRODUCT_INFORMATION', 'COMPLAINTS_AND_FEEDBACK', 'HANDLE_FAQS', 'SEASONAL_SALES', 'GENERATE_MAIL_PROMOTION', 'GENERATE_MAIL_ORDERS', 'REVIEW_BYTES', 'DOC SEARCH']
 

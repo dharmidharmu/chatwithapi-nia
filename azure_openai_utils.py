@@ -26,7 +26,7 @@ from standalone_programs.image_analyzer import analyze_image
 from dotenv import load_dotenv # For environment variables (recommended)
 
 from mongo_service import fetch_chat_history, delete_chat_history, update_message
-from role_mapping import FORMAT_RESPONSE_AS_MARKDOWN, NIA_SEMANTIC_CONFIGURATION_NAME, USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
+from role_mapping import FORMAT_RESPONSE_AS_MARKDOWN, FUNCTION_CALLING_USER_MESSAGE, NIA_SEMANTIC_CONFIGURATION_NAME, USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
 from standalone_programs.simple_gpt import run_conversation, ticket_conversations, get_conversation
 from routes.ilama32_routes import chat2
 
@@ -849,7 +849,8 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
         api_version=GPT_4o_API_VERSION)
 
     # Initial user message
-    function_calling_conversations.append({"role": "user", "content": FUNCTION_CALLING_SYSTEM_MESSAGE.format(query=search_query,conversation_history=conversations,image_details=image_response)}) # Single function call
+    function_calling_conversations.append({"role": "system", "content":FUNCTION_CALLING_SYSTEM_MESSAGE}) # Single function call
+    function_calling_conversations.append({"role": "user", "content": FUNCTION_CALLING_USER_MESSAGE.format(query=search_query,conversation_history=conversations,image_details=image_response)}) # Single function call
     #messages = [{"role": "user", "content": "What's the current time in San Francisco, Tokyo, and Paris?"}] # Parallel function call with a single tool/function defined
 
     # Define the function for the model
