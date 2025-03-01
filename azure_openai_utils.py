@@ -138,51 +138,55 @@ def get_azure_search_parameters(search_endpoint: str, index_name: str, search_ke
     return extra_body
 
 async def store_to_blob_storage(uploadedImage: UploadFile = None):
-
-    file_name = uploadedImage.filename
-
-    # Initialize Blob Service Client
-    blob_client = blob_service_client.get_blob_client(container=AZURE_BLOB_STORAGE_CONTAINER, blob=file_name)
-
-    # Upload image to Azure Blob Storage
-    blob_client.upload_blob(uploadedImage.file, overwrite=True)
-
-    # Generate a SAS token (valid for 60 minutes)
-    sas_token = generate_blob_sas(
-        account_name=AZURE_BLOB_STORAGE_ACCOUNT_NAME,
-        container_name=AZURE_BLOB_STORAGE_CONTAINER,
-        blob_name=file_name,
-        account_key=AZURE_BLOB_STORAGE_ACCESS_KEY,
-        permission=BlobSasPermissions(read=True),
-        expiry=datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=60)
-    )
-
-    # Generate URL
-    #blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{azure_blob_storage_container}/{file_name}"
-
-    # Generate the full URL with SAS token
-    blob_url_with_sas = f"{blob_client.url}?{sas_token}"
-    logger.info(f"Blob URL: {blob_url_with_sas}")
-    
-    return DEFAULT_RESPONSE if blob_url_with_sas == None or blob_url_with_sas == "" else blob_url_with_sas
-
-async def fetch_image_from_blob_storage(blob_url: str):
     try:
-        # Extract the blob client from the URL
-        blob_client = blob_service_client.get_blob_client(container=AZURE_BLOB_STORAGE_CONTAINER, blob=blob_url.split("/")[-1].split("?")[0])
+        file_name = uploadedImage.filename
 
-        # Download the blob content
-        download_stream = await blob_client.download_blob()
-        image_data = await download_stream.readall()
+        # Initialize Blob Service Client
+        blob_client = blob_service_client.get_blob_client(container=AZURE_BLOB_STORAGE_CONTAINER, blob=file_name)
 
-        # Convert the image data to base64
-        base64_image = base64.b64encode(image_data).decode('utf-8')
-        logger.info(f"Fetched image from blob storage and converted to base64")
+        # Upload image to Azure Blob Storage
+        blob_client.upload_blob(uploadedImage.file, overwrite=True)
 
-        return base64_image
+        # Generate a SAS token (valid for 60 minutes)
+        sas_token = generate_blob_sas(
+            account_name=AZURE_BLOB_STORAGE_ACCOUNT_NAME,
+            container_name=AZURE_BLOB_STORAGE_CONTAINER,
+            blob_name=file_name,
+            account_key=AZURE_BLOB_STORAGE_ACCESS_KEY,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=60)
+        )
+
+        # Generate URL
+        #blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{azure_blob_storage_container}/{file_name}"
+
+        # Generate the full URL with SAS token
+        blob_url_with_sas = f"{blob_client.url}?{sas_token}"
+        logger.info(f"Blob URL: {blob_url_with_sas}")
+        return blob_url_with_sas
     except Exception as e:
-        logger.error(f"Error occurred while fetching image from blob storage: {e}", exc_info=True)
-        return None
+        logger.error(f"Error occurred while storing image to Azure Blob Storage: {e}", exc_info=True)
+        return DEFAULT_RESPONSE
+    
+    #return DEFAULT_RESPONSE if blob_url_with_sas == None or blob_url_with_sas == "" else blob_url_with_sas
+
+# async def fetch_image_from_blob_storage(blob_url: str):
+#     try:
+#         # Extract the blob client from the URL
+#         blob_client = blob_service_client.get_blob_client(container=AZURE_BLOB_STORAGE_CONTAINER, blob=blob_url.split("/")[-1].split("?")[0])
+
+#         # Download the blob content
+#         download_stream = await blob_client.download_blob()
+#         image_data = await download_stream.readall()
+
+#         # Convert the image data to base64
+#         base64_image = base64.b64encode(image_data).decode('utf-8')
+#         logger.info(f"Fetched image from blob storage and converted to base64")
+
+#         return base64_image
+#     except Exception as e:
+#         logger.error(f"Error occurred while fetching image from blob storage: {e}", exc_info=True)
+#         return str(e)
 
 async def saveAssistantResponse(response: str, gpt: GPTData, conversations: list):
     # Log the response to database
@@ -510,54 +514,58 @@ async def preprocessForRAG(user_message: str, image_response:str, use_case:str, 
 async def processImage(streaming_response: bool, save_response_to_db: bool, user_message: str, model_configuration: ModelConfiguration, gpt: GPTData, conversations: list, uploadedImage: UploadFile = None):
     image_url = ""
     base64_image = ""
+    try:
+        if uploadedImage is not None and uploadedImage.filename != "blob" and uploadedImage.filename != "dummy":
+            image_url = await store_to_blob_storage(uploadedImage)
 
-    if uploadedImage is not None and uploadedImage.filename != "blob" and uploadedImage.filename != "dummy":
-        image_url = await store_to_blob_storage(uploadedImage)
+            if image_url == None or image_url == "" or image_url == "N/A":
+                logger.info(f"Image URL is empty. Passing Base64 encoded image for inference {image_url}")
+                # 1. Read image content
+                contents = await uploadedImage.read()
 
-        if image_url == None or image_url == "" or image_url == "N/A":
-            logger.info(f"Image URL is empty. Passing Base64 encoded image for inference {image_url}")
-            # 1. Read image content
-            contents = await uploadedImage.read()
+                # 2. Encode as base64 
+                base64_image = base64.b64encode(contents).decode('utf-8')
+                logger.info(f"Image size (bytes): {len(contents)}")
 
-            # 2. Encode as base64 
-            base64_image = base64.b64encode(contents).decode('utf-8')
-            logger.info(f"Image size (bytes): {len(contents)}")
+                image_url = f"data:image/jpeg;base64,{base64_image}"
 
-            image_url = f"data:image/jpeg;base64,{base64_image}"
+            logger.info(f"Image URL before sending to model is {image_url}")
 
-        logger.info(f"Image URL before sending to model is {image_url}")
+            # 3. Prepare messages with image_url
+            image_message = {
+                                "role": "user", 
+                                "content": [
+                                    #{"type": "text", "text": user_message},
+                                    {
+                                        "type": "image_url", 
+                                        "image_url": {"url": image_url}
+                                    }
+                                ]
+                            }
+            
+            # 4. Add image message to the conversation
+            conversations.append(image_message)
 
-        # 3. Prepare messages with image_url
-        image_message = {
-                            "role": "user", 
-                            "content": [
-                                #{"type": "text", "text": user_message},
-                                {
-                                    "type": "image_url", 
-                                    "image_url": {"url": image_url}
-                                }
-                            ]
-                        }
-        
-        # 4. Add image message to the conversation
-        conversations.append(image_message)
+            await update_message({
+                "gpt_id": gpt["_id"],
+                "gpt_name": gpt["name"],
+                "role": "user",
+                #"content": f"data:image/jpeg;base64,{base64_image}"
+                "content": image_url
+            })
 
-        await update_message({
-            "gpt_id": gpt["_id"],
-            "gpt_name": gpt["name"],
-            "role": "user",
-            #"content": f"data:image/jpeg;base64,{base64_image}"
-            "content": image_url
-        })
+            # 5. Call Azure OpenAI API for image analysis
+            if streaming_response:
+                response = await analyzeImage_stream(gpt, conversations, model_configuration, save_response_to_db)
+            else:
+                response = await analyzeImage_standard(gpt, conversations, model_configuration, save_response_to_db)
 
-        # 5. Call Azure OpenAI API for image analysis
-        if streaming_response:
-            response = await analyzeImage_stream(gpt, conversations, model_configuration, save_response_to_db)
-        else:
-            response = await analyzeImage_standard(gpt, conversations, model_configuration, save_response_to_db)
+            logger.info(f"Image Response: {response}")
 
-        logger.info(f"Image Response: {response}")
-
+    except Exception as e:
+        logger.error(f"Error occurred while processing image: {e}", exc_info=True)
+        response = str(e) # Return the error message as response
+    
     return response
 
 async def processResponse(response):
