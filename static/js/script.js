@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const newGptForm = document.getElementById('newGptForm');
     const gptNameInput = document.getElementById('gptName');
     //const gptName1Input = document.getElementById('gptName1');
+    const streamResponsesCheckbox = document.getElementById('streamResponses');
     const gptDescriptionInput = document.getElementById('gptDescription');
     const gptInstructionsInput = document.getElementById('gptInstructions');
     const gptModalPopUp = document.getElementById('gptModalPopUp');
@@ -49,6 +50,13 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }  
     }); 
+
+    function convertMarkDownToHtml(markdownText){
+        //return markDownConverter.makeHtml(text);
+        let htmlContent = marked.parse(markdownText); // Convert Markdown to HTML
+        hljs.highlightAll(); // Apply syntax highlighting if code exists
+        return htmlContent;
+    }
 
     function clearUploadedImageName(){
          // Clean up the image name
@@ -624,7 +632,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
                 // 2. Send the message to the server
-                const response = await fetch(`/chat/${current_gpt_id}/${gpt_name}`, {
+                const isStreamingResponse = streamResponsesCheckbox && streamResponsesCheckbox.checked ? true : false;
+                const chatURL =  isStreamingResponse ? `/chat/stream/${current_gpt_id}/${gpt_name}` : `/chat/${current_gpt_id}/${gpt_name}`;
+
+                // 2. Send the message to the server
+                const response = await fetch(chatURL, {
                     method: 'POST',
                     body: gptData
                     // headers: {
@@ -638,50 +650,86 @@ document.addEventListener('DOMContentLoaded', function () {
                     //throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 else{
-                    var data = await response.json();
-                    console.log(data);
-                    //data = JSON.parse(data);
-                    console.log("AI Response:", data.response);
-                    const total_tokens = data.total_tokens;
-                    //totalTokensDiv.text = `${total_tokens}/${maxTokens}`;
-                    updateTokenProgress(total_tokens, maxTokens);
-                    
-                    // 3. Display the AI's response
-                    const aiMessageElement = document.createElement('div');
-                    aiMessageElement.classList.add("message", "ai-message");
-        
-                    const formattedContent = data.response ? data.response.replace(/\n/g, '<br>'):''; // To maintain the formatting sent by the model in the response
-                    aiMessageElement.innerHTML = formattedContent  + ' '; // Add space for button
-                    chatHistory.appendChild(aiMessageElement);
+                    if(isStreamingResponse){
+                        // Get the reader from the response body
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        let aiMessageElement = document.createElement('div');
+                        aiMessageElement.classList.add("message", "ai-message");
+                        chatHistory.appendChild(aiMessageElement);
 
-                    // 4. Display follow-up questions (if any)
-                if (data.follow_up_questions && data.follow_up_questions.length > 0) {
-                    console.log('Follow-up Questions:', data.follow_up_questions);
-                    const followUpDiv = document.createElement('div');
-                    followUpDiv.classList.add('follow-up-questions');
-                    // followUpDiv.innerHTML = '<strong>Follow-up Questions:</strong><br>';
+                        // Function to read the stream
+                        async function readStream() {
+                            let { done, value } = await reader.read();
+                            while (!done) {
+                                // Decode the chunk and append it to the message element
+                                // const chunk = decoder.decode(value, { stream: true });
+                                // aiMessageElement.innerHTML += chunk.replace(/\n/g, '<br>');
 
-                    data.follow_up_questions.forEach((question) => {
-                        const followUpButton = document.createElement('button');
-                        followUpButton.innerHTML = question;
-                        followUpButton.classList.add('btn', 'btn-sm', 'follow-up-button');
-                        followUpButton.dataset.value = question;
+                                const chunk = decoder.decode(value, { stream: true });
+                                model_response = convertMarkDownToHtml(chunk);
+                                aiMessageElement.innerHTML += chunk.replace(/\n/g, '<br>');
 
-                     // When clicked, insert the follow-up question into the input box
-                    followUpButton.addEventListener('click', function() {
-                        const chatInput = document.getElementById('userInput'); // Ensure this element exists
-                        if (chatInput) {
-                            chatInput.value = followUpButton.dataset.value; // Set the button value into the input field
-                        } else {
-                            console.error('Chat input box not found.');
+                                // Read the next chunk
+                                ({ done, value } = await reader.read());
+                            }
                         }
-                });
 
-                followUpDiv.appendChild(followUpButton);
-            });
+                        // Start reading the stream
+                        readStream().catch(error => {
+                            console.error('Error reading stream:', error);
+                        });
+                    } 
+                    else{
+                       var data = await response.json();
+                        console.log(data);
+                        //data = JSON.parse(data);
+                        console.log("AI Response:", data.response);
+                        const total_tokens = data.total_tokens;
+                        totalTokensDiv.text = `${total_tokens}/${maxTokens}`;
+                        updateTokenProgress(total_tokens, maxTokens);
+                        
+                        // 3. Display the AI's response
+                        const aiMessageElement = document.createElement('div');
+                        aiMessageElement.classList.add("message", "ai-message");
+            
+                        // var formattedContent = data.response ? data.response.replace(/\n/g, '<br>'):''; // To maintain the formatting sent by the model in the response
+                        // aiMessageElement.innerHTML = formattedContent  + ' '; // Add space for button
+                        
+                        var model_response = data.response ? data.response : 'No response from model'; 
+                        model_response = convertMarkDownToHtml(model_response);
+                        aiMessageElement.innerHTML = model_response;
+                        chatHistory.appendChild(aiMessageElement);
 
-            aiMessageElement.appendChild(followUpDiv);
-        }
+                        // 4. Display follow-up questions (if any)
+                        if (data.follow_up_questions && data.follow_up_questions.length > 0) {
+                            console.log('Follow-up Questions:', data.follow_up_questions);
+                            const followUpDiv = document.createElement('div');
+                            followUpDiv.classList.add('follow-up-questions');
+                            // followUpDiv.innerHTML = '<strong>Follow-up Questions:</strong><br>';
+
+                            data.follow_up_questions.forEach((question) => {
+                                const followUpButton = document.createElement('button');
+                                followUpButton.innerHTML = question;
+                                followUpButton.classList.add('btn', 'btn-sm', 'follow-up-button');
+                                followUpButton.dataset.value = question;
+
+                                // When clicked, insert the follow-up question into the input box
+                                followUpButton.addEventListener('click', function() {
+                                    const chatInput = document.getElementById('userInput'); // Ensure this element exists
+                                    if (chatInput) {
+                                        chatInput.value = followUpButton.dataset.value; // Set the button value into the input field
+                                    } else {
+                                        console.error('Chat input box not found.');
+                                    }
+                                });
+
+                                followUpDiv.appendChild(followUpButton);
+                            });
+
+                            aiMessageElement.appendChild(followUpDiv);
+                        } 
+                    }
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
@@ -713,6 +761,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 imageBox.width = 200;
                 imageBox.height = 200;
                 imageBox.alt = 'Image analysis result';
+                imageBox.src = `${content}`;
+                userMessageElement.appendChild(imageBox);
+            }
+            else if(content.indexOf("blob.core.windows.net") !== -1){
+                console.log(content);
+                
+                //const imageUrl = URL.createObjectURL(imageBlob);
+                const imageBox = document.createElement('img');
+                imageBox.width = 250;
+                imageBox.height = 200;
+                imageBox.alt = `${content}`;
                 imageBox.src = `${content}`;
                 userMessageElement.appendChild(imageBox);
             }

@@ -13,6 +13,10 @@
     padding-top: 70px; 
 }
 
+body {
+   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif
+}
+
 .content-container {
     margin-left: 150px; 
     padding: 20px;
@@ -145,7 +149,7 @@ margin-right: 50px;     /* Add margin for visual separation */
    font-size: 1.2em; 
 }
 
-.delete-gpt-button, .edit-gpt-button, .clear-gpt-button {
+.delete-gpt-button, .edit-gpt-button, .clear-gpt-button, .export-gpt-button {
    font-size: 1.2em;  /* Adjust size as needed */
    margin-right: 5px; /* Add spacing if necessary */
    cursor: pointer;
@@ -225,9 +229,16 @@ margin-right: 50px;     /* Add margin for visual separation */
    /* margin-left: 800px !important; */
 }
 
+.features {
+   display: flex;
+}
+
+.features2 {
+   display: block;
+}
 
 .token-progress {
-   display: none;
+   /* display: none; */
    width: 100%;
    background-color: #e0e0e0;
    height: 20px;

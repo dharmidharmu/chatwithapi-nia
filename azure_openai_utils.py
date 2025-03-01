@@ -3,10 +3,15 @@ import base64
 import logging
 import json
 import re
+from fastapi.responses import StreamingResponse
 import requests
+import datetime
+import tiktoken
 
 from fastapi import UploadFile
-from openai import AzureOpenAI
+from openai import APIConnectionError, AsyncAzureOpenAI, AzureOpenAI, BadRequestError, RateLimitError
+from azure.storage.blob import BlobServiceClient
+from azure.storage.blob import generate_blob_sas, BlobSasPermissions
 
 from data.GPTData import GPTData
 from data.ModelConfiguration import ModelConfiguration
@@ -15,12 +20,13 @@ from azure.identity import DefaultAzureCredential, ClientSecretCredential
 from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 from azure.search.documents import SearchClient
 
-from gpt_utils import extract_response, get_previous_context_conversations
+from dependencies import NiaAzureOpenAIClient
+from gpt_utils import extract_json_content, extract_response, get_previous_context_conversations, get_token_count
 from standalone_programs.image_analyzer import analyze_image
 from dotenv import load_dotenv # For environment variables (recommended)
 
 from mongo_service import fetch_chat_history, delete_chat_history, update_message
-from role_mapping import USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
+from role_mapping import FORMAT_RESPONSE_AS_MARKDOWN, NIA_SEMANTIC_CONFIGURATION_NAME, USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
 from standalone_programs.simple_gpt import run_conversation, ticket_conversations, get_conversation
 from routes.ilama32_routes import chat2
 
@@ -31,41 +37,70 @@ load_dotenv()  # Load environment variables from .env file
 # Create a logger for this module
 logger = logging.getLogger(__name__)
 
+token_encoder = tiktoken.encoding_for_model("gpt-4o") 
+
 
 # Model = should match the deployment name you chose for your model deployment
 delimiter = "```"
-default_model_name = os.getenv("DEFAULT_MODEL_NAME")
-ecomm_model_name = os.getenv("ECOMMERCE_MODEL_NAME")
-azure_endpoint = os.getenv("AZURE_ENDPOINT_URL")
-api_key = os.getenv("OPEN_API_KEY")
-api_version = os.getenv("API_VERSION")
+DEFAULT_RESPONSE = "N/A"
 search_endpoint = os.getenv("SEARCH_ENDPOINT_URL")
 search_key = os.getenv("SEARCH_KEY")
 search_index = os.getenv("SEARCH_INDEX_NAME")
 review_bytes_index = os.getenv("NIA_REVIEW_BYTES_INDEX_NAME")
 nia_semantic_configuration_name = os.getenv("NIA_SEMANTIC_CONFIGURATION_NAME")
 
-gpt4o_model_name = os.getenv("GPT4O_MODEL_NAME")
-gpt4o_api_key=os.getenv("GPT4O_API_KEY")
-gpt4o_endpoint=os.getenv("GPT4O_ENDPOINT_URL")
-gpt4o_api_version = os.getenv("GPT4O_API_VERSION")
+# Azure Open AI - Model parameters
+DEFAULT_MODEL_NAME = os.getenv("DEFAULT_MODEL_NAME")
+ECOMMERCE_MODEL_NAME = os.getenv("ECOMMERCE_MODEL_NAME")
+AZURE_ENDPOINT_URL = os.getenv("AZURE_ENDPOINT_URL")
+AZURE_OPENAI_KEY = os.getenv("OPEN_API_KEY")
+AZURE_OPENAI_MODEL_API_VERSION = os.getenv("API_VERSION")
+
+# Azure GPT 4o parameters
+GPT_4o_MODEL_NAME = os.getenv("GPT4O_MODEL_NAME")
+GPT_4o_API_KEY=os.getenv("GPT4O_API_KEY")
+GPT_4o_ENDPOINT_URL=os.getenv("GPT4O_ENDPOINT_URL")
+GPT_4o_API_VERSION = os.getenv("GPT4O_API_VERSION")
 
 subscription_id = os.getenv("SUBSCRIPTION_ID")
 resource_group_name = os.getenv("RESOURCE_GROUP_NAME")
 openai_account_name = os.getenv("OPENAI_ACCOUNT_NAME")
 #previous_conversations_count = os.getenv("PREVIOUS_CONVERSATIONS_TO_CONSIDER")
 
+# Azure Blob Storage - Used for storing image uploads
+AZURE_BLOB_STORAGE_CONNECTION_URL=os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+AZURE_BLOB_STORAGE_CONTAINER=os.getenv("BLOB_STORAGE_CONTAINER_NAME")
+AZURE_BLOB_STORAGE_ACCOUNT_NAME=os.getenv("BLOB_STORAGE_ACCOUNT_NAME")
+AZURE_BLOB_STORAGE_ACCESS_KEY=os.getenv("BLOB_STORAGE_ACCESS_KEY")
+
 DEFAULT_ERROR_RESPONSE_FROM_MODEL="The requested information is not available in the retrieved data. Please try another query or topic."
 DEFAULT_FOLLOW_UP_QUESTIONS = ["I would like to know more about this topic", "I need further clarification", "Rephrase your findings"]
 
-def getAzureOpenAIClient(azure_endpoint: str, api_key: str, api_version: str):
-    logger.info(f"delimiter: {delimiter} \ndefault_model_name: {default_model_name} \necomm_model_name: {ecomm_model_name} \nazure_endpoint: {azure_endpoint} \napi_key: {api_key} \napi_version: {api_version} \nsearch_endpoint: {search_endpoint} \nsearch_key: {search_key} \nsearch_index: {search_index}")
-    # Establish connection to Azure Open AI
-    client = AzureOpenAI(
-        azure_endpoint=azure_endpoint,
-        api_key=api_key,
-        api_version=api_version)
-   
+blob_service_client = BlobServiceClient(f"https://{AZURE_BLOB_STORAGE_ACCOUNT_NAME}.blob.core.windows.net",
+    credential=AZURE_BLOB_STORAGE_ACCESS_KEY
+)
+
+async def getAzureOpenAIClient(azure_endpoint: str, api_key: str, api_version: str, stream: bool):
+    #logger.info(f"delimiter: {delimiter} \ndefault_model_name: {default_model_name} \necomm_model_name: {ecomm_model_name} \nazure_endpoint: {azure_endpoint} \napi_key: {api_key} \napi_version: {api_version} \nsearch_endpoint: {search_endpoint} \nsearch_key: {search_key} \nsearch_index: {search_index}")
+    
+    # # Establish connection to Azure Open AI
+    # if stream:
+    #     client = AsyncAzureOpenAI(
+    #         azure_endpoint=azure_endpoint,
+    #         api_key=api_key,
+    #         api_version=api_version)
+    # else:
+    #     client = AzureOpenAI(
+    #     azure_endpoint=azure_endpoint,
+    #     api_key=api_key,
+    #     api_version=api_version)
+
+    # Create the singleton instance
+    nia_azure_client = NiaAzureOpenAIClient(azure_endpoint, api_key, api_version, stream)
+
+    # Retrieve the client
+    client = nia_azure_client.get_azure_client()
+    
     return client
 
 def get_azure_search_parameters(search_endpoint: str, index_name: str, search_key: str, role_information: str, index_fields: list):
@@ -89,10 +124,10 @@ def get_azure_search_parameters(search_endpoint: str, index_name: str, search_ke
                 },
                 "filter": None,
                 "in_scope": True,
-                "top_n_documents": 20,
+                "top_n_documents": 10,
                 #"strictness": 3,
                 "query_type": "semantic",
-                "semantic_configuration": nia_semantic_configuration_name, #"default",
+                "semantic_configuration": NIA_SEMANTIC_CONFIGURATION_NAME, #"default",
                 #"role_information": instructions,
                 "role_information": role_information
             }
@@ -100,22 +135,82 @@ def get_azure_search_parameters(search_endpoint: str, index_name: str, search_ke
     }
     
     logger.info(f"Extra Body for Azure Search: {extra_body}")
-    
     return extra_body
 
-async def get_completion_from_messages(model_name, model_configuration, messages, use_case, role_information):
+async def store_to_blob_storage(uploadedImage: UploadFile = None):
+
+    file_name = uploadedImage.filename
+
+    # Initialize Blob Service Client
+    blob_client = blob_service_client.get_blob_client(container=AZURE_BLOB_STORAGE_CONTAINER, blob=file_name)
+
+    # Upload image to Azure Blob Storage
+    blob_client.upload_blob(uploadedImage.file, overwrite=True)
+
+    # Generate a SAS token (valid for 60 minutes)
+    sas_token = generate_blob_sas(
+        account_name=AZURE_BLOB_STORAGE_ACCOUNT_NAME,
+        container_name=AZURE_BLOB_STORAGE_CONTAINER,
+        blob_name=file_name,
+        account_key=AZURE_BLOB_STORAGE_ACCESS_KEY,
+        permission=BlobSasPermissions(read=True),
+        expiry=datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=60)
+    )
+
+    # Generate URL
+    #blob_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{azure_blob_storage_container}/{file_name}"
+
+    # Generate the full URL with SAS token
+    blob_url_with_sas = f"{blob_client.url}?{sas_token}"
+    logger.info(f"Blob URL: {blob_url_with_sas}")
+    
+    return DEFAULT_RESPONSE if blob_url_with_sas == None or blob_url_with_sas == "" else blob_url_with_sas
+
+async def fetch_image_from_blob_storage(blob_url: str):
+    try:
+        # Extract the blob client from the URL
+        blob_client = blob_service_client.get_blob_client(container=AZURE_BLOB_STORAGE_CONTAINER, blob=blob_url.split("/")[-1].split("?")[0])
+
+        # Download the blob content
+        download_stream = await blob_client.download_blob()
+        image_data = await download_stream.readall()
+
+        # Convert the image data to base64
+        base64_image = base64.b64encode(image_data).decode('utf-8')
+        logger.info(f"Fetched image from blob storage and converted to base64")
+
+        return base64_image
+    except Exception as e:
+        logger.error(f"Error occurred while fetching image from blob storage: {e}", exc_info=True)
+        return None
+
+async def saveAssistantResponse(response: str, gpt: GPTData, conversations: list):
+    # Log the response to database
+        await update_message({
+            "gpt_id": gpt["_id"], # Make sure gpt is accessible here
+            "gpt_name": gpt["name"], # Make sure gpt is accessible here
+            "role": "assistant",
+            "content": response
+        })
+
+        conversations.append({"role": "assistant", "content": response}) # Append the response to the conversation history
+
+async def get_completion_from_messages_standard(gpt: GPTData, model_configuration, conversations, use_case, role_information):
     model_response = "No Response from Model"
     main_response = ""
     total_tokens = 0
     follow_up_questions = []
+    reasoning = ""
+
+    # This client is synchronous and doesn't need await signal. Set stream=False
 
     try:
-       # Get Azure Open AI Client and fetch response
-        client = getAzureOpenAIClient(azure_endpoint, api_key, api_version)
+        # Get Azure Open AI Client and fetch response
+        client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
         model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
-
         extra_body = {}
-        if model_name == "ecommerce-rag-demo" or model_name == "Nia":
+        
+        if gpt["use_rag"] == True:
             logger.info("Assigning additional search parameters for E-commerce model")
             if use_case == "REVIEW_BYTES":
                 #extra_body = get_azure_search_parameters(search_endpoint, review_bytes_index, search_key, role_information, review_bytes_index_fields)
@@ -123,53 +218,158 @@ async def get_completion_from_messages(model_name, model_configuration, messages
             else:
                 #extra_body = get_azure_search_parameters(search_endpoint, search_index, search_key, role_information, ecomm_rag_demo_index_fields)
                 pass
-
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            max_tokens=model_configuration.max_tokens,
+        
+        response = await client.chat.completions.create(
+            model=gpt["name"],
+            messages=conversations,
+            max_tokens=model_configuration.max_tokens, #max_tokens is now deprecated with o1 models
             temperature=model_configuration.temperature,
             top_p=model_configuration.top_p,
             frequency_penalty=model_configuration.frequency_penalty,
             presence_penalty=model_configuration.presence_penalty,
+            extra_body=extra_body,
+            seed=100,
             stop=None,
             stream=False,
-            extra_body=extra_body
+            user=gpt["user"]
+            #n=2,
+            #reasoning_effort="low", # available for o1,o3 models only
+            #timeout=30,
         )
-
-        # Call llama and get response
-        #llama_response = await chat2("llama3.2", messages=messages)
-        
         model_response = response.choices[0].message.content
         logger.info(f"Full Model Response is {response}")
 
+        
         if model_response is None or model_response == "":
-            model_response, main_response = "No Response from Model. Please try again."
+            main_response = "No Response from Model. Please try again."
         else:            
-            main_response, follow_up_questions, total_tokens = processResponse(response) # considering as json response
-
+            main_response, follow_up_questions, total_tokens = await extract_json_content(response)
+    except APIConnectionError as ce:
+        logger.error(f"APIConnectionError occurred while fetching model response: {ce}", exc_info=True)
+        total_tokens = len(token_encoder.encode(str(conversations)))
+        main_response = f"Connection error occurred while reaching to Azure Open AI. Please try again after some time.\n\n Exception Details : " + ce.message
+    except BadRequestError as be:
+        logger.error(f"BadRequestError occurred while fetching model response: {be}", exc_info=True)
+        total_tokens = len(token_encoder.encode(str(conversations)))
+        main_response = f"Bad Request error occurred while reaching to Azure Open AI. \n\n Exception Details : " + be.message
+    except RateLimitError as re:
+        logger.error(f"RateLimitError occurred while fetching model response: {re}", exc_info=True)
+        total_tokens = len(token_encoder.encode(str(conversations)))
+        main_response = f"Model is handling heavy load.  Please clear the chat or initiate a new chat window or try after some time..\n\n Exception Details : " + re.message
     except Exception as e:
         logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
-        main_response = str(e)
+        main_response = f"Error occurred while fetching model response: \n\n" + str(e)
+    finally:
+         # Log the response to database
+        await saveAssistantResponse(main_response, gpt, conversations)
         
-    # return modelResponse
     return {
-        #"model_response": f"Open AI Response:\n {main_response} \n\n Llama Response:\n{llama_response}",
-        "model_response": f"Open AI Response:\n {main_response}",
+        "model_response" : main_response,
         "total_tokens": total_tokens,
-        "follow_up_questions": follow_up_questions
+        "follow_up_questions": follow_up_questions,
+        "reasoning" : reasoning
     }
 
-async def get_completion_from_messages_default(model_name: str, messages: list, model_configuration: ModelConfiguration):
+async def get_completion_from_messages_stream(gpt: GPTData, model_configuration, conversations, use_case, role_information):
+     # This client is asynchronous and needs await signal. Set stream=True
+    try:
+        # Get Azure Open AI Client and fetch response
+        client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, True)
+        model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
+        extra_body = {}
+
+        if gpt["use_rag"] == True:
+            logger.info("Assigning additional search parameters for E-commerce model")
+            if use_case == "REVIEW_BYTES":
+                #extra_body = get_azure_search_parameters(search_endpoint, review_bytes_index, search_key, role_information, review_bytes_index_fields)
+                pass
+            else:
+                #extra_body = get_azure_search_parameters(search_endpoint, search_index, search_key, role_information, ecomm_rag_demo_index_fields)
+                pass
+        
+        full_response_content = ""
+        
+        async def stream_processor():
+            nonlocal full_response_content
+
+            response = await client.chat.completions.create(
+                model=gpt["name"],
+                messages=conversations,
+                max_tokens=model_configuration.max_tokens,
+                temperature=model_configuration.temperature,
+                top_p=model_configuration.top_p,
+                frequency_penalty=model_configuration.frequency_penalty,
+                presence_penalty=model_configuration.presence_penalty,
+                stop=None,
+                stream=True,
+                extra_body=extra_body,
+                seed=100,
+                user=gpt["user"]
+                #n=2,
+                #reasoning_effort="low", # available for o1,o3 models only
+                #timeout=30,
+            )
+
+            async for chunk in response:
+                nonlocal full_response_content
+
+                if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
+                    #logger.info(f"chunk.choices[0].delta {chunk.choices[0].delta}")
+                    chunkContent = chunk.choices[0].delta.content
+                    if chunkContent is not None:
+                        full_response_content += chunkContent
+                        #chunkContent = await convert_markdown_to_html(chunkContent)
+                        yield chunkContent
+        
+        # Create a wrapper generator that handles post-stream processing
+        async def response_wrapper():
+            nonlocal full_response_content
+            nonlocal gpt
+            try:
+                async for chunk in stream_processor():
+                    #logger.info(f"chunk data {chunk}")
+                    yield chunk
+            except APIConnectionError as ce:
+                logger.error(f"APIConnectionError occurred while fetching model response: {ce}", exc_info=True)
+                #yield str(re)
+                full_response_content = f"Connection error occurred while reaching to Azure Open AI. Please try again after some time." + ce.message
+                yield full_response_content
+            except BadRequestError as be:
+                logger.error(f"BadRequestError occurred while fetching model response: {be}", exc_info=True)
+                full_response_content = f"Bad Request error occurred while reaching to Azure Open AI. \n\n Exception Details : " + be.message
+                yield full_response_content
+            except RateLimitError as re:
+                logger.error(f"RateLimitError occurred while fetching model response: {re}", exc_info=True)
+                #yield str(re)
+                full_response_content = f"Model is handling heavy load.  Please clear the chat or initiate a new chat window or try after some time." + re.message
+                yield full_response_content
+            except Exception as e:
+                logger.error(f"Exception occurred while fetching model response: {e}", exc_info=True)
+                #yield str(re)
+                full_response_content = f"Exception occurred while fetching model response: {str(e)}."
+                yield full_response_content
+            finally:
+                # This block ensures post-stream processing happens after the stream is complete
+                if full_response_content is not None:
+                    # update the response to database
+                    await saveAssistantResponse(full_response_content, gpt, conversations)
+        
+        return StreamingResponse(response_wrapper(), media_type="text/event-stream")
+    
+    except Exception as e:
+        logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
+        return StreamingResponse(iter([str(e)]), media_type="text/event-stream")
+
+async def get_completion_from_messages_default(model_name: str, use_rag: bool, messages: list, model_configuration: ModelConfiguration):
 
     model_response = "No Response from Model"
 
     # Get Azure Open AI Client and fetch response
-    client = getAzureOpenAIClient(azure_endpoint, api_key, api_version)
+    client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
     model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=model_name,
             messages=messages,
             max_tokens=model_configuration.max_tokens,
@@ -189,21 +389,21 @@ async def get_completion_from_messages_default(model_name: str, messages: list, 
     
     return model_response
 
-async def analyzeImage(model_name, messages, model_configuration):
-    #logger.info(f"Conversations: {messages}")
+async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration, save_response_to_db: bool):
     model_response = "No Response from Model"
     main_response = "No Response from Model"
     total_tokens = 0
     follow_up_questions = []
 
     # Get Azure Open AI Client and fetch response
-    client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version)
+    #client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version, False)
+    client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
     model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
 
     try:
-        response = client.chat.completions.create(
-            model=gpt4o_model_name,
-            messages=messages,
+        response = await client.chat.completions.create(
+            model=GPT_4o_MODEL_NAME,
+            messages=conversations,
             max_tokens=model_configuration.max_tokens,
             temperature=model_configuration.temperature,
             top_p=model_configuration.top_p,
@@ -219,7 +419,11 @@ async def analyzeImage(model_name, messages, model_configuration):
         if model_response is None or model_response == "":
             model_response = "No Response from Model. Please try again."
         else:
-            main_response, follow_up_questions, total_tokens = processResponse(response)
+            main_response, follow_up_questions, total_tokens = await processResponse(response)
+
+        # Log the response to database
+        if save_response_to_db:
+            await saveAssistantResponse(main_response, gpt, conversations)
 
     except Exception as e:
         logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
@@ -231,74 +435,106 @@ async def analyzeImage(model_name, messages, model_configuration):
         "follow_up_questions": follow_up_questions
     }
 
-async def generate_response(user_message: str, model_configuration: ModelConfiguration, gpt: GPTData, uploadedImage: UploadFile = None):
+async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, save_response_to_db: bool):
+    # Get Azure Open AI Client and fetch response
+    #client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version, True)
+    client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, True)
+    model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
 
-    instruction_data = gpt["instructions"].split("@@@@@")
-    use_case = instruction_data[0]
-   # logger.info(f"The current usecase is {use_case}")
-    role_information, model_configuration = get_role_information(use_case)
-    previous_conversations_count = 6
+    try:
+        full_response_content = ""
+        
+        async def stream_processor():
+            nonlocal full_response_content
+            
+            response = await client.chat.completions.create(
+                model=GPT_4o_MODEL_NAME,
+                messages=conversations,
+                max_completion_tokens=model_configuration.max_tokens,
+                temperature=model_configuration.temperature,
+                top_p=model_configuration.top_p,
+                frequency_penalty=model_configuration.frequency_penalty,
+                presence_penalty=model_configuration.presence_penalty,
+                stop=None,
+                stream=True
+            )
+            
+            async for chunk in response:
+                nonlocal full_response_content
 
-    if gpt["name"] == "ecommerce-rag-demo" or gpt["name"] == "Nia":
-        context_information = await get_data_from_azure_search(user_message, use_case)
+                if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
+                    logger.info(f"chunk.choices[0].delta {chunk.choices[0].delta}")
+                    chunkContent = chunk.choices[0].delta.content
+                    if chunkContent is not None:
+                        full_response_content += chunkContent
+                        yield chunkContent
+        
+        # Create a wrapper generator that handles post-stream processing
+        async def response_wrapper():
+            nonlocal full_response_content
 
-    # Step 1 : Get last conversation history 
-    chat_history = fetch_chat_history(gpt["_id"], gpt["name"], limit=-1) # We need entire conversation history to be passed to the model
+            try:
+                async for chunk in stream_processor():
+                    yield chunk
+            finally:
+                # This block ensures post-stream processing happens after the stream is complete
+                if full_response_content is not None:
+                    nonlocal gpt
+                    # update the response to database
+                    if save_response_to_db:
+                        await saveAssistantResponse(full_response_content, gpt, conversations)
+        
+        return StreamingResponse(response_wrapper(), media_type="text/event-stream")
     
-    # Step 3: Format the conversation to support OpenAI format (System Message, User Message, Assistant Message)
-    #conversations = [{"role": "system", "content": gpt["instructions"] + FUNCTION_CALLING_SYSTEM_MESSAGE}]
-    conversations = [{"role": "system", "content": gpt["instructions"]}]
-    for msg in chat_history:
-        conversations.append({"role": msg["role"], "content": msg["content"]})
-
-    # Get previous conversation for context
-    #previous_conversations = get_previous_context_conversations(conversation_list=conversations, previous_conversations_count=previous_conversations_count)
+    except Exception as e:
+        logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
+        return StreamingResponse(iter([str(e)]), media_type="text/event-stream")
     
-    # if gpt["name"] == "ecommerce-rag-demo":
-    #     context_information, conversations_from_function_calling = await determineFunctionCalling(user_message, use_case, gpt["name"])
-    #     conversations.extend(conversations_from_function_calling)
+async def preprocessForRAG(user_message: str, image_response:str, use_case:str, gpt: GPTData, conversations: list):
+    
+    context_information, conversations = await determineFunctionCalling(user_message, image_response, use_case, gpt, conversations)
 
     # Step 4: Append the current user query with additional context into the conversation. 
     # This additional context is only to generate the response from the model and won't be saved in the conversation history for aesthetic reasons.
-    #if context_information is not None and context_information != "":
-    if  gpt["name"] == "ecommerce-rag-demo" or gpt["name"] == "Nia":
-        #if len(context_information) > 0:
-            USER_PROMPT = USE_CASE_CONFIG[use_case]["user_message"]
-            logger.info(f"USE_CASE_CONFIG[use_case]: {USER_PROMPT}")
-            conversations.append({
-                                    "role": "user",
-                                    "content" : USER_PROMPT.format(
-                                                    query=user_message, sources=context_information),
+    if context_information is not None and context_information != "" and len(context_information) > 0:
+        USER_PROMPT = USE_CASE_CONFIG[use_case]["user_message"]
+        logger.info(f"USE_CASE_CONFIG[use_case]: {USER_PROMPT}")
+        conversations.append({
+                                "role": "user",
+                                "content" : USER_PROMPT.format(
+                                                query=user_message, sources=context_information) + FORMAT_RESPONSE_AS_MARKDOWN
                             })
     else:
-        logger.info("No function calling. Plain query used as user message")
         conversations.append({"role": "user", "content": user_message})
-    
-    # Step 5: Add the current user query to the messages Collection (Chat History). Avoid saving the query with additional grounded prompt information
-    update_message({
-        "gpt_id": gpt["_id"],
-        "gpt_name": gpt["name"],
-        "role": "user",
-        "content": f"{user_message}", 
-    })
-    
-    # Step 6: Handle images/attachments if any or the user query
-    logger.info(f"Uploaded Image {uploadedImage}")
-    if uploadedImage is not None and uploadedImage.filename != "blob" and uploadedImage.filename != "dummy":
-        # 1. Read image content
-        contents = await uploadedImage.read()
 
-        # 2. Encode as base64 
-        base64_image = base64.b64encode(contents).decode('utf-8')
-        logger.info(f"Image size (bytes): {len(contents)}")
-        
+async def processImage(streaming_response: bool, save_response_to_db: bool, user_message: str, model_configuration: ModelConfiguration, gpt: GPTData, conversations: list, uploadedImage: UploadFile = None):
+    image_url = ""
+    base64_image = ""
+
+    if uploadedImage is not None and uploadedImage.filename != "blob" and uploadedImage.filename != "dummy":
+        image_url = await store_to_blob_storage(uploadedImage)
+
+        if image_url == None or image_url == "" or image_url == "N/A":
+            logger.info(f"Image URL is empty. Passing Base64 encoded image for inference {image_url}")
+            # 1. Read image content
+            contents = await uploadedImage.read()
+
+            # 2. Encode as base64 
+            base64_image = base64.b64encode(contents).decode('utf-8')
+            logger.info(f"Image size (bytes): {len(contents)}")
+
+            image_url = f"data:image/jpeg;base64,{base64_image}"
+
+        logger.info(f"Image URL before sending to model is {image_url}")
+
         # 3. Prepare messages with image_url
         image_message = {
                             "role": "user", 
                             "content": [
+                                #{"type": "text", "text": user_message},
                                 {
                                     "type": "image_url", 
-                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                                    "image_url": {"url": image_url}
                                 }
                             ]
                         }
@@ -306,18 +542,132 @@ async def generate_response(user_message: str, model_configuration: ModelConfigu
         # 4. Add image message to the conversation
         conversations.append(image_message)
 
-        update_message({
+        await update_message({
             "gpt_id": gpt["_id"],
             "gpt_name": gpt["name"],
             "role": "user",
-            "content": f"data:image/jpeg;base64,{base64_image}"
+            #"content": f"data:image/jpeg;base64,{base64_image}"
+            "content": image_url
         })
 
         # 5. Call Azure OpenAI API for image analysis
-        response = await analyzeImage(gpt["name"], conversations, model_configuration)
+        if streaming_response:
+            response = await analyzeImage_stream(gpt, conversations, model_configuration, save_response_to_db)
+        else:
+            response = await analyzeImage_standard(gpt, conversations, model_configuration, save_response_to_db)
+
+        logger.info(f"Image Response: {response}")
+
+    return response
+
+async def processResponse(response):
+    total_tokens = response.usage.total_tokens
+    follow_up_questions=[]
+    model_response = response.choices[0].message.content
+    main_response = ""
+
+    if model_response is not None and model_response != "" and model_response.find("follow_up_questions") != -1: 
+        try:
+             response_json = await extract_response(model_response) # Extract the JSON response from the model response. The model response is expected to be wrapped in triple backticks
+             main_response = response_json["model_response"]
+             follow_up_questions = response_json["follow_up_questions"]
+
+            #main_response, follow_up_questions = extract_response_from_markdown(model_response)
+        except Exception as e:
+            logger.error(f"Error occurred while processing model response: {e}", exc_info=True)
+            main_response = model_response
+            follow_up_questions = [] # do not send follow-up questions in exception scenarios
     else:
-        # Azure OpenAI API call
-        response = await get_completion_from_messages(gpt["name"], model_configuration, conversations, use_case, role_information)
+        # Handle cases where the follow-up questions are missing
+        main_response = model_response
+        follow_up_questions = DEFAULT_FOLLOW_UP_QUESTIONS
+
+    return main_response, follow_up_questions, total_tokens
+
+async def generate_response(streaming_response: bool, user_message: str, model_configuration: ModelConfiguration, gpt: GPTData, uploadedFile: UploadFile = None):
+
+    instruction_data = gpt["instructions"].split("@@@@@")
+    use_case = instruction_data[0]
+    role_information, model_configuration = await get_role_information(use_case)
+    previous_conversations_count = 6
+    proceed = False
+    model_name = gpt["name"]
+
+    # if gpt["name"] == "ecommerce-rag-demo":
+    #     context_information = await get_data_from_azure_search(user_message, use_case)
+
+    # Step 1 : Get last conversation history 
+    chat_history = await fetch_chat_history(gpt["_id"], model_name, limit=-1) # We need entire conversation history to be passed to the model
+    
+    # Step 3: Format the conversation to support OpenAI format (System Message, User Message, Assistant Message)
+    conversations = [{"role": "system", "content": gpt["instructions"]}]
+    for msg in chat_history:
+        conversations.append({"role": msg["role"], "content": msg["content"]})
+
+    # Construct the token request
+    token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+    logger.info(f"Token Calculation is {token_data}")
+    
+    # Get previous conversation for context
+    #previous_conversations = get_previous_context_conversations(conversation_list=conversations, previous_conversations_count=previous_conversations_count)
+
+    # Step 5: Add the current user query to the messages Collection (Chat History). Avoid saving the query with additional grounded prompt information
+    await update_message({
+        "gpt_id": gpt["_id"],
+        "gpt_name": gpt["name"],
+        "role": "user",
+        "content": f"{user_message}", 
+    })
+        
+    use_rag = gpt["use_rag"]
+    has_image = (uploadedFile is not None and uploadedFile.filename != "blob" and uploadedFile.filename != "dummy")
+    has_file = has_image and uploadedFile.filename.endswith(".pdf")
+    DEFAULT_IMAGE_RESPONSE = ""
+
+    logger.info(f"use_rag is {use_rag}and has_image is {has_image}")
+    
+    # Step 6: Handle images/attachments if any or the user query
+    logger.info(f"Uploaded File {uploadedFile}")
+    if not use_rag and has_image:
+        logger.info("CASE 1 : No RAG but Image is present")
+        proceed = False
+        response = await processImage(streaming_response, True, user_message, model_configuration, gpt, conversations, uploadedFile)
+    elif use_rag and has_image:
+        logger.info("CASE 2 : RAG and Image is present")
+        proceed = True
+        #Step 1 : Process the image (Always keep the stream flag as False when processing the image with RAG. Because we need 
+        # full information of the image for the function calling to take a decision. Streaming will cause problems)
+        conversation_for_image_analysis = []
+        conversation_for_image_analysis.append({"role":"system", "content": "You are helpful AI Assistant who can analyze the given image and return the description in maximum 100 words as response."})
+        image_response = await processImage(False, False, user_message, model_configuration, gpt, conversation_for_image_analysis, uploadedFile)
+        conversation_for_image_analysis.clear()
+
+        #Step 2 : Function Calling
+        if image_response is not None:
+            conversations.append({"role": "user", "content": user_message})
+            conversations.append({"role": "assistant", "content": "Image Analysis Result : " + image_response.get("model_response")})
+            await preprocessForRAG(user_message, image_response, use_case, gpt, conversations)
+    elif use_rag and not has_image:
+        logger.info("CASE 3 : RAG and No Image")
+        proceed = True
+        await preprocessForRAG(user_message, DEFAULT_IMAGE_RESPONSE, use_case, gpt, conversations)
+        conversations.append({"role": "user", "content": user_message})
+    else:
+        logger.info("CASE 4 : No RAG and No Image")
+        proceed = True
+        logger.info("No function calling. Plain query used as user message")
+        conversations.append({"role": "user", "content": user_message})
+        
+    # Step 7: Get the token count after the user message is added to the conversation
+    # token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+    # logger.info(f"Token Calculation2 is {token_data}")
+
+    # Azure OpenAI API call
+    if proceed == True:
+        if streaming_response:
+            response = await get_completion_from_messages_stream(gpt, model_configuration, conversations, use_case, role_information)
+        else:
+            response = await get_completion_from_messages_standard(gpt, model_configuration, conversations, use_case, role_information)
 
     # Sometimes model returns "null" which is not supported by python
     # the null gets into the chat history and ruins all the subsequent calls to the model
@@ -325,16 +675,10 @@ async def generate_response(user_message: str, model_configuration: ModelConfigu
     if response is None:
         response = "No response from model"
     else:
-        # Add response from model to the messages Collection
-        update_message({
-            "gpt_id": gpt["_id"],
-            "gpt_name": gpt["name"],
-            "role": "assistant",
-            "content": response["model_response"]
-        })
+        pass
         
-    conversations.append({"role": "assistant", "content": response["model_response"]}) 
     logger.info(f"Conversation : {conversations}")
+    logger.info(f"Tokens in the conversation {len(token_encoder.encode(str(conversations)))}")
 
     # summarize the conversation history if its close to 90% of the token limit
     # if int(response["total_tokens"]) >= int(model_configuration["max_tokens"]) * 0.9:
@@ -348,28 +692,6 @@ async def generate_response(user_message: str, model_configuration: ModelConfigu
     #     })
 
     return response
-
-def processResponse(response):
-    total_tokens = response.usage.total_tokens
-    follow_up_questions=[]
-    model_response = response.choices[0].message.content
-    main_response = ""
-
-    if model_response is not None and model_response != "": 
-        try:
-            response_json = extract_response(model_response) # Extract the JSON response from the model response. The model response is expected to be wrapped in triple backticks
-            main_response = response_json["model_response"]
-            follow_up_questions = response_json["follow_up_questions"]
-        except Exception as e:
-            logger.error(f"Error occurred while processing model response: {e}", exc_info=True)
-            main_response = model_response
-            follow_up_questions = [] # do not send follow-up questions in exception scenarios
-    else:
-        # Handle cases where the follow-up questions are missing
-        main_response = model_response
-        follow_up_questions = DEFAULT_FOLLOW_UP_QUESTIONS
-
-    return main_response, follow_up_questions, total_tokens
 
 async def get_data_from_azure_search(search_query: str, use_case: str):
     """
@@ -421,12 +743,6 @@ async def get_data_from_azure_search(search_query: str, use_case: str):
                                                  select=selected_fields)
         
         logger.info("Documents in Azure Search:")
-        # for doc in search_results:
-        #     logger.info(doc)
-
-        #sources_filtered = [{field: result[field] for field in selected_fields} for result in search_results]
-        #sources_formatted = "\n".join([json.dumps(source) for source in sources_filtered])
-        #context_information = "\n".join([f'{document["order_id"]}:{document["product_description"]}:{document["brand"]}:{document["order_date"]}:{document["status"]}:{document["delivery_date"]}' for document in search_results])
 
         # Convert SearchItemPaged to a list of dictionaries
         results_list = [result for result in search_results]
@@ -503,7 +819,7 @@ async def summarize_conversations(chat_history, gpt):
         model_configuration: ModelConfiguration = ModelConfiguration(**SUMMARIZE_MODEL_CONFIGURATION)
 
         # Get Azure Open AI Client and fetch response
-        conversation_summary = await get_completion_from_messages_default(default_model_name, messages, model_configuration)
+        conversation_summary = await get_completion_from_messages_default(DEFAULT_MODEL_NAME, messages, model_configuration)
 
         # Remove the summarized conversations from the messages collection
         delete_chat_history(gpt["_id"], gpt["name"])
@@ -511,18 +827,21 @@ async def summarize_conversations(chat_history, gpt):
 
     return conversation_summary
 
-async def determineFunctionCalling(search_query: str, use_case: str, deployment_name: str):
-    messages = []
-    function_response = []
+async def determineFunctionCalling(search_query: str, image_response: str, use_case: str, gpt: GPTData, conversations: list):
+    function_calling_conversations = []
+    data = []
+    deployment_name = gpt["name"]
 
-    # Initialize the Azure OpenAI client
-    client = AzureOpenAI(
-        azure_endpoint=azure_endpoint,
-        api_key=api_key,
-        api_version=api_version)
+    logger.info(f"determineFunctionCalling calling Start {deployment_name}")
+
+    # Azure Open AI Clients for different tasks
+    azure_openai_client =  AsyncAzureOpenAI(
+        azure_endpoint=GPT_4o_ENDPOINT_URL, 
+        api_key=GPT_4o_API_KEY, 
+        api_version=GPT_4o_API_VERSION)
 
     # Initial user message
-    messages.append({"role": "user", "content": search_query}) # Single function call
+    function_calling_conversations.append({"role": "user", "content": FUNCTION_CALLING_SYSTEM_MESSAGE.format(query=search_query,conversation_history=conversations,image_details=image_response)}) # Single function call
     #messages = [{"role": "user", "content": "What's the current time in San Francisco, Tokyo, and Paris?"}] # Parallel function call with a single tool/function defined
 
     # Define the function for the model
@@ -551,45 +870,60 @@ async def determineFunctionCalling(search_query: str, use_case: str, deployment_
         }
     ]
 
-    # First API call: Ask the model to use the function
-    response = client.chat.completions.create(
-        model=deployment_name,
-        messages=messages,
-        tools=tools,
-        #tool_choice="none",
-        #tool_choice="auto"
-        tool_choice={"type": "function", "function" : {"name"  : "get_data_from_azure_search"}}
-    )
+    response_from_function_calling_model = ""
+    function_calling_model_response = ""
 
-    # Process the model's response
-    response_message = response.choices[0].message
+    try:
+        # First API call: Ask the model to use the function
+        response_from_function_calling_model = await azure_openai_client.chat.completions.create(
+            model=deployment_name,
+            messages=function_calling_conversations,
+            tools=tools,
+            #tool_choice="none",
+            tool_choice="auto"
+            #tool_choice={"type": "function", "function" : {"name"  : "get_data_from_azure_search"}}
+        )
 
-    messages.clear() # Clear the messages list because we do not need the system message, user message in this function
-    messages.append(response_message)
+        logger.info(f"Full function calling response : {response_from_function_calling_model}")
 
-    logger.info(f"Model's response: {response_message}")
+        # Process the model's response
+        function_calling_model_response = response_from_function_calling_model.choices[0].message
+        #function_calling_conversations.append(response_message)
 
-    # Handle function calls
-    if response_message.tool_calls:
-        for tool_call in response_message.tool_calls:
-            if tool_call.function.name == "get_data_from_azure_search":
-                function_args = json.loads(tool_call.function.arguments)
-                logger.info(f"Function arguments: {function_args}")  
-                function_response = await get_data_from_azure_search(
-                    search_query=function_args.get("search_query"),
-                    use_case=function_args.get("use_case")
-                )
+        # Handle function calls
+        if function_calling_model_response.tool_calls:
+            for tool_call in function_calling_model_response.tool_calls:
+                if tool_call.function.name == "get_data_from_azure_search":
+                    logger.info("get_data_from_azure_search called")
+                    function_args = json.loads(tool_call.function.arguments)
+                    logger.info(f"Function arguments: {function_args}")  
+                    data = await get_data_from_azure_search(
+                        search_query=function_args.get("search_query"),
+                        use_case=function_args.get("use_case")
+                    )
 
-                messages.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": "get_data_from_azure_search",
-                    "content": function_response,
-                })
-    else:
-        logger.info("No tool calls were made by the model.")  
+                    # Append the function response to the original conversation list
+                    # conversations.append({
+                    #     "tool_call_id": tool_call.id,
+                    #     "role": "tool",
+                    #     "name": "get_data_from_azure_search",
+                    #     "content": data #data, # commenting data because it will be redundant in the conversation history as we are adding the contextual_information to sources in USER_PROMPT
+                    # })
+            logger.info("Function calling END")
+        else:
+            logger.info("No tool calls were made by the model.")
 
-    return function_response, messages
+    except RateLimitError as rle:
+        logger.error(f"RateLimitError occurred while calling the function: {rle}", exc_info=True)
+        function_calling_model_response = "ERROR#####" + str(rle) + "Your token utilization is high (Max tokens per window 8000). Please try again later."
+    except Exception as e:
+        logger.error(f"Error occurred while calling the function: {e}", exc_info=True)
+        function_calling_model_response = "ERROR#####" + str(e)
+    finally:
+        function_calling_conversations.clear() # Clear the messages list because we do not need the system message, user message in this function
+        logger.info(f"function_calling_model_response {function_calling_model_response}")
+
+    return data, conversations
 
 # def get_azure_openai_deployments():
 #     logger.info("Getting deployments from Azure OpenAI")
@@ -647,7 +981,7 @@ async def determineFunctionCalling(search_query: str, use_case: str, deployment_
     
 #     return response
 
-def call_maf(ticketId: str):
-    client = getAzureOpenAIClient(azure_endpoint, api_key, api_version)
-    model_output = run_conversation(client, ticketId)
+async def call_maf(ticketId: str):
+    client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
+    model_output = await run_conversation(client, ticketId)
     return model_output

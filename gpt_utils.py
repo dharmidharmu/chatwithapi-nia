@@ -4,6 +4,7 @@ from data.GPTData import GPTData
 import logging
 import json
 import re
+import tiktoken
 
 from mongo_service import update_usecases, update_orders
 
@@ -14,6 +15,8 @@ UPLOAD_FOLDER = "uploads"
 APP_IMAGES_FOLDER = os.path.join(UPLOAD_FOLDER, "appimages")
 CHAT_IMAGES_FOLDER = os.path.join(UPLOAD_FOLDER, "chatimages")
 RAG_DOCUMENTS_FOLDER = os.path.join(UPLOAD_FOLDER, "ragdocuments")
+
+token_encoder = tiktoken.encoding_for_model("gpt-4o")
 
 def create_folders():
     # Create upload folders if they don't exist
@@ -199,3 +202,68 @@ def trim_conversation_history(conversation_history, max_tokens):
         total_tokens = sum(len(msg['content'].split()) for msg in conversation_history)
     
     return conversation_history
+
+async def extract_json_content(response):
+    total_tokens = response.usage.total_tokens
+    main_response = response.choices[0].message.content
+    follow_up_questions=[]
+
+    # Find content between json``` and ```
+    json_match = re.search(r'```json\n(.*?)```', main_response, re.DOTALL)
+    
+    if json_match:
+        try:
+            # Parse the extracted content as JSON
+            follow_up_questions = json.loads(json_match.group(1).strip())
+            follow_up_questions = follow_up_questions["follow_up_questions"]
+
+             # Remove the entire JSON block from main_response
+            main_response = main_response.replace(json_match.group(0), '').strip()
+        except json.JSONDecodeError as je:
+            logger.info(f"exception occurred while json pattern selected {str(je)}")
+
+    return main_response, follow_up_questions, total_tokens 
+
+# Token counting function
+async def count_tokens(text: str, model_name: str) -> int:
+    tokens = 0
+    try:
+        #tokenizer = MODEL_TOKENIZERS.get(model_name)
+        if model_name == "gpt-4o" or model_name == "gpt-3.5":
+            tokens = len(token_encoder.encode(str(text)))  # OpenAI's `tiktoken`
+    except Exception as e:
+        logger.error(f"Tokenization error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Tokenization error: {str(e)}")
+    finally:
+        logger.info(f"Token count {tokens} for model {model_name}")
+    
+    return tokens
+
+
+async def get_token_count(model_name, system_message,  conversations, user_message, max_tokens):
+    # Construct the token request
+    # Remove the system message from the conversation history
+    user_conversations: str = ""
+    for msg in conversations:
+        if msg["role"] != "system":
+            user_conversations += msg["content"] + " "
+
+    # Calculate tokens for each component
+    system_tokens = await count_tokens(system_message, model_name)
+    history_tokens = await count_tokens(user_conversations, model_name)
+    query_tokens = await count_tokens(user_message, model_name)
+
+    logger.info(f"System Tokens: {system_tokens}, History Tokens: {history_tokens}, Query Tokens: {query_tokens}")
+
+    # Total estimated tokens
+    estimated_tokens = system_tokens + history_tokens + query_tokens + max_tokens
+
+    return {"token_breakdown": 
+                {
+                    "message_history": history_tokens,
+                    "user_query": query_tokens,
+                    "system_message": system_tokens,
+                    "max_response": max_tokens,
+                    "estimated_max_tokens": estimated_tokens
+                }
+            }
