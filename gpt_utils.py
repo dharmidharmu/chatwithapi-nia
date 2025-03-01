@@ -38,7 +38,7 @@ def create_app_directories():
     os.makedirs(STATIC_SCRIPTS_FOLDER, exist_ok=True)
     os.makedirs(STATIC_CSS_FOLDER, exist_ok=True)
 
-def handle_upload_files(gpt: GPTData, files: list[UploadFile]):
+async def handle_upload_files(gpt: GPTData, files: list[UploadFile]):
     # Additional validation (you can add more checks here, like file type validation)
     if gpt.use_rag:
         total_size = sum(file.size for file in files)
@@ -75,7 +75,7 @@ def handle_upload_files(gpt: GPTData, files: list[UploadFile]):
                             # Assuming gpt_id is available in the gpt object
                             # for usecase in usecases:
                             #     usecase['gpt_id'] = gpt.gpt_id
-                            update_usecases(usecases)
+                            await update_usecases(usecases)
                             file_upload_status += f"File {uploadedFile.filename} processed and database updated successfully."
                     except Exception as e:
                         file_upload_status += f"Error processing file: {str(e)}"
@@ -84,7 +84,7 @@ def handle_upload_files(gpt: GPTData, files: list[UploadFile]):
                     try:
                         with open(file_path, "r", encoding='utf-8') as json_file:
                             orders = [json.loads(line) for line in json_file]
-                            update_orders(orders)
+                            await update_orders(orders)
                             file_upload_status += f"File {uploadedFile.filename} processed and database updated successfully."
                     except Exception as e:
                         file_upload_status += f"Error processing file: {str(e)}"
