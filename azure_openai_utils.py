@@ -115,7 +115,7 @@ async def get_completion_from_messages(model_name, model_configuration, messages
         model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
 
         extra_body = {}
-        if model_name == "ecommerce-rag-demo":
+        if model_name == "ecommerce-rag-demo" or model_name == "Nia":
             logger.info("Assigning additional search parameters for E-commerce model")
             if use_case == "REVIEW_BYTES":
                 #extra_body = get_azure_search_parameters(search_endpoint, review_bytes_index, search_key, role_information, review_bytes_index_fields)
@@ -239,7 +239,7 @@ async def generate_response(user_message: str, model_configuration: ModelConfigu
     role_information, model_configuration = get_role_information(use_case)
     previous_conversations_count = 6
 
-    if gpt["name"] == "ecommerce-rag-demo":
+    if gpt["name"] == "ecommerce-rag-demo" or gpt["name"] == "Nia":
         context_information = await get_data_from_azure_search(user_message, use_case)
 
     # Step 1 : Get last conversation history 
@@ -261,7 +261,7 @@ async def generate_response(user_message: str, model_configuration: ModelConfigu
     # Step 4: Append the current user query with additional context into the conversation. 
     # This additional context is only to generate the response from the model and won't be saved in the conversation history for aesthetic reasons.
     #if context_information is not None and context_information != "":
-    if  gpt["name"] == "ecommerce-rag-demo":
+    if  gpt["name"] == "ecommerce-rag-demo" or gpt["name"] == "Nia":
         #if len(context_information) > 0:
             USER_PROMPT = USE_CASE_CONFIG[use_case]["user_message"]
             logger.info(f"USE_CASE_CONFIG[use_case]: {USER_PROMPT}")
