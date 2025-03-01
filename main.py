@@ -19,24 +19,24 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware import Middleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.responses import RedirectResponse, HTMLResponse
-
 import msal
 from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ClientSecretCredential
 from azure.core.exceptions import AzureError
-from pymongo.errors import DuplicateKeyError
 
+from pymongo.errors import DuplicateKeyError
 from data.GPTData import GPTData
 from data.ModelConfiguration import ModelConfiguration
 from gpt_utils import handle_upload_files, create_folders
-from azure_openai_utils import generate_response, call_maf
-from mongo_service import gpts_collection, create_new_gpt, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction
+from azure_openai_utils import generate_response, get_azure_openai_deployments, call_maf
+from mongo_service import get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message
+from routes.ilama32_routes import router as ilama32_router
 
 import uvicorn
 from bson import ObjectId
 from dotenv import load_dotenv # For environment variables (recommended)
 from standalone_programs.simple_gpt import run_conversation, ticket_conversations, get_conversation
-
+import httpx
 
 delimiter = "```"
 load_dotenv()  # Load environment variables from .env file
@@ -70,7 +70,13 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
 )
 
-logger = logging.getLogger(__name__)
+# Disable the change detected log
+class IgnoreChangeDeductedFilter(logging.Filter):
+    def filter(self, record):
+        return "change detected" not in record.getMessage().lower()
+ 
+logger = logging.getLogger()
+logger.addFilter(IgnoreChangeDeductedFilter())
 
 # FastAPI Configuration
 # CORS configuration (update with your frontend origin)
@@ -114,6 +120,8 @@ middleware = [
 ]
 
 app = FastAPI(middleware=middleware, trusted_hosts=["customgptapp.azurewebsites.net","niaapp2.azurewebsites.net"])
+# Include the routers
+app.include_router(ilama32_router, prefix="/ilama32", tags=["ilama32"])
 
 # Set up Jinja2 for templating
 templates = Jinja2Templates(directory="templates")
@@ -340,7 +348,7 @@ async def create_gpt(request: Request, loggedUser: str = Cookie(None), gpt: str 
                 for file in files:
                     logger.info(f"Received files: {file.filename}")
 
-            gpt_id = create_new_gpt(gpt)
+            gpt_id = await create_new_gpt(gpt)
             logger.info(f"GPT created with ID: {gpt_id}")
 
             file_upload_status = ""
@@ -368,7 +376,7 @@ async def get_gpts(request: Request):
     #logger.info(f"User: {json.dumps(request.session.get('user'))}")
 
     if loggedUser != None and loggedUser != "N/A":
-        gpts = list(gpts_collection.find({'user': loggedUser}))  # Get all GPTs from MongoDB
+        gpts = await get_gpts_for_user(loggedUser)
         for gpt in gpts:
             gpt["_id"] = str(gpt["_id"]) # Convert ObjectId to string
 
@@ -380,8 +388,8 @@ async def chat(request: Request, gpt_id: str, gpt_name: str, user_message: str =
         return JSONResponse({"error": "Missing 'user_message' in request body."}, status_code=400)
     
     try:
-        logger.info(f"Chat request received with GPT ID: {gpt_name} and user message: {user_message} and params: {params}")
-        gpt = gpts_collection.find_one({"_id": ObjectId(gpt_id)})
+        logger.info(f"Chat request received with GPT ID: {gpt_name} \n user message: {user_message} \n params: {params}")
+        gpt = await get_gpt_by_id(gpt_id)
 
          # Parse the JSON string into a dictionary
         model_configuration = json.loads(params)
@@ -391,14 +399,36 @@ async def chat(request: Request, gpt_id: str, gpt_name: str, user_message: str =
         if gpt is None:
             return JSONResponse({"error": "GPT not found."}, status_code=404)
         
-        #logger.info(f"GPT Data: {gpt}")
-        response = await generate_response(user_message, model_configuration, gpt, uploadedImage)
-        logger.info(f"Response from Model: {response}")
+        streaming_response = False
+        response = await generate_response(streaming_response, user_message, model_configuration, gpt, uploadedImage)
     except HTTPException as he:
         logger.error(f"Error while getting response from Model. Details : \n {he.detail}", exc_info=True)
         return JSONResponse({"error": f"Error while getting response from Model. Details : \n {he.detail}"}, status_code=500)
 
     return JSONResponse({"response": response['model_response'], "total_tokens" : response['total_tokens'] if response['total_tokens'] else 0, "follow_up_questions": response['follow_up_questions'] }, status_code=200)
+
+@app.post("/chat/stream/{gpt_id}/{gpt_name}")
+async def chat(request: Request, gpt_id: str, gpt_name: str, user_message: str = Form(...), params: str = Form(...), uploadedImage: UploadFile = File(...)):
+    if not user_message:
+        return JSONResponse({"error": "Missing 'user_message' in request body."}, status_code=400)
+    
+    try:
+        logger.info(f"Chat request received with GPT ID: {gpt_name} \n user message: {user_message}\n params: {params}")
+        gpt = await get_gpt_by_id(gpt_id)
+
+         # Parse the JSON string into a dictionary
+        model_configuration = json.loads(params)
+        model_configuration = ModelConfiguration(**model_configuration)  
+        logger.info(f"Received GPT data: {gpt} \n Model Configuration: {model_configuration}")
+
+        if gpt is None:
+            return JSONResponse({"error": "GPT not found."}, status_code=404)
+        
+        streaming_response = True
+        return await generate_response(streaming_response, user_message, model_configuration, gpt, uploadedImage)
+    except HTTPException as he:
+        logger.error(f"Error while getting response from Model. Details : \n {he.detail}", exc_info=True)
+        return JSONResponse({"error": f"Error while getting response from Model. Details : \n {he.detail}"}, status_code=500)
 
 @app.post("/update_instruction/{gpt_id}/{gpt_name}/{usecase_id}")
 async def update_instruction(request: Request, gpt_id: str, gpt_name: str, usecase_id: str):
@@ -407,7 +437,7 @@ async def update_instruction(request: Request, gpt_id: str, gpt_name: str, useca
     try:
         loggedUser = getUserName(request, "update_instruction")
         if loggedUser != None and loggedUser != "N/A":
-            result = update_gpt_instruction(gpt_id, gpt_name, usecase_id, loggedUser)
+            result = await update_gpt_instruction(gpt_id, gpt_name, usecase_id, loggedUser)
             logger.info(f"Instruction updated for GPT: {gpt_name}, result: {result}")
 
             if result.modified_count == 1:
@@ -443,7 +473,7 @@ async def modify_gpt(request: Request, gpt_id: str, gpt_name: str, gpt: str = Bo
                 for file in files:
                     logger.info(f"Received files: {file.filename}")
 
-            result = update_gpt(gpt_id, gpt_name, gpt)
+            result = await update_gpt(gpt_id, gpt_name, gpt)
             logger.info(f"GPT : {gpt.name}, result: {result}, use_rag: {bool(gpt.use_rag)}")
 
             file_upload_status = ""
@@ -471,7 +501,7 @@ async def remove_gpt(gpt_id: str, gpt_name: str):
     logger.info(f"Deleting GPT: {gpt_id} Name: {gpt_name}")
 
     # Delete the GPT
-    gpt_delete_result = delete_gpt(gpt_id, gpt_name)
+    gpt_delete_result = await delete_gpt(gpt_id, gpt_name)
 
     if gpt_delete_result.deleted_count == 1:
         response = JSONResponse({"message": "GPT and Chat history removed successfully.!"})
@@ -484,7 +514,7 @@ async def remove_gpt(gpt_id: str, gpt_name: str):
 async def delete_all_gpts(request: Request):
     loggedUser = getUserName(request, "delete_all_gpts")
     if loggedUser != None and loggedUser != "N/A":
-        result = delete_gpts(loggedUser)  # Delete all documents in the collection
+        result = await delete_gpts(loggedUser)  # Delete all documents in the collection
         if result.deleted_count > 0:
             response = JSONResponse({"message": "All GPTs deleted successfully!"})
         else:
@@ -498,7 +528,7 @@ async def delete_all_gpts(request: Request):
 async def get_chat_history(gpt_id: str, gpt_name: str):
     logger.info(f"Fetching chat history for GPT: {gpt_id} Name: {gpt_name}")
 
-    chat_history = fetch_chat_history(gpt_id, gpt_name, max_tokens_in_conversation)  # Fetch chat history from MongoDB
+    chat_history = await fetch_chat_history(gpt_id, gpt_name, max_tokens_in_conversation)  # Fetch chat history from MongoDB
 
     # After saving the image, read its contents and encode the image as base64
     # The image URL will be saved in the chat. Use the URL to pick the image from the server
@@ -521,7 +551,7 @@ async def get_chat_history(gpt_id: str, gpt_name: str):
 async def clear_chat_history(gpt_id: str, gpt_name: str):
     logger.info(f"Clearing chat history for GPT: {gpt_id} Name: {gpt_name}")
 
-    result = delete_chat_history(gpt_id, gpt_name)  # Delete all documents in the collection
+    result = await delete_chat_history(gpt_id, gpt_name)  # Delete all documents in the collection
 
     logger.info(f"Modified count: {result.modified_count}")
     
@@ -535,7 +565,7 @@ async def clear_chat_history(gpt_id: str, gpt_name: str):
 @app.get("/usecases/{gpt_id}")
 async def fetch_usecases(gpt_id: str):
     try:
-        result = get_usecases(gpt_id)
+        result = await get_usecases(gpt_id)
         logger.info(f"Use cases fetched successfully: {len(result)}")
         response = JSONResponse({"message": "SUCCESS", "usecases": result}, status_code=200)
     except Exception as e:
