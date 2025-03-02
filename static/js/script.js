@@ -789,8 +789,9 @@ document.addEventListener('DOMContentLoaded', function () {
             aiMessageElement.classList.add("message", "ai-message");
 
             // Replace newlines with <br> tags for HTML rendering
-            const formattedContent = content.replace(/\n/g, '<br>'); 
-            aiMessageElement.innerHTML = formattedContent  + ' '; // Add space for button
+           // const formattedContent = content.replace(/\n/g, '<br>'); 
+            aiMessageElement.innerHTML = convertMarkDownToHtml(content)  + ' '; // Add space for button
+            
 
             //aiMessageElement.appendChild(aiDeleteButton);
             chatHistory.appendChild(aiMessageElement);

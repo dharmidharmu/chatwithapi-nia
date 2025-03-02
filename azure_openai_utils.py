@@ -58,6 +58,7 @@ AZURE_OPENAI_MODEL_API_VERSION = os.getenv("API_VERSION")
 
 # Azure GPT 4o parameters
 GPT_4o_MODEL_NAME = os.getenv("GPT4O_MODEL_NAME")
+GPT_4o_2_MODEL_NAME = os.getenv("GPT4O_2_MODEL_NAME")
 GPT_4o_API_KEY=os.getenv("GPT4O_API_KEY")
 GPT_4o_ENDPOINT_URL=os.getenv("GPT4O_ENDPOINT_URL")
 GPT_4o_API_VERSION = os.getenv("GPT4O_API_VERSION")
@@ -382,7 +383,8 @@ async def get_completion_from_messages_default(model_name: str, use_rag: bool, m
             frequency_penalty=model_configuration.frequency_penalty,
             presence_penalty=model_configuration.presence_penalty,
             stop=None,
-            stream=False
+            stream=False,
+            seed=100
         )
         logger.info(f"Default Model Response is {response}")
         model_response = response.choices[0].message.content
@@ -406,7 +408,7 @@ async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration
 
     try:
         response = await client.chat.completions.create(
-            model=GPT_4o_MODEL_NAME,
+            model=GPT_4o_2_MODEL_NAME,
             messages=conversations,
             max_tokens=model_configuration.max_tokens,
             temperature=model_configuration.temperature,
@@ -414,7 +416,8 @@ async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration
             frequency_penalty=model_configuration.frequency_penalty,
             presence_penalty=model_configuration.presence_penalty,
             stop=None,
-            stream=False
+            stream=False,
+            seed=100
         )
         model_response = response.choices[0].message.content
         #logger.info(f"Model Response is {response}")
@@ -452,7 +455,7 @@ async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, 
             nonlocal full_response_content
             
             response = await client.chat.completions.create(
-                model=GPT_4o_MODEL_NAME,
+                model=GPT_4o_2_MODEL_NAME,
                 messages=conversations,
                 max_completion_tokens=model_configuration.max_tokens,
                 temperature=model_configuration.temperature,
@@ -460,7 +463,8 @@ async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, 
                 frequency_penalty=model_configuration.frequency_penalty,
                 presence_penalty=model_configuration.presence_penalty,
                 stop=None,
-                stream=True
+                stream=True,
+                seed=100
             )
             
             async for chunk in response:
@@ -885,12 +889,13 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
     try:
         # First API call: Ask the model to use the function
         response_from_function_calling_model = await azure_openai_client.chat.completions.create(
-            model=deployment_name,
+            model=GPT_4o_2_MODEL_NAME,
             messages=function_calling_conversations,
             tools=tools,
             #tool_choice="none",
-            tool_choice="auto"
+            tool_choice="auto",
             #tool_choice={"type": "function", "function" : {"name"  : "get_data_from_azure_search"}}
+            seed=200
         )
 
         logger.info(f"Full function calling response : {response_from_function_calling_model}")
