@@ -270,7 +270,7 @@ async def update_usecases(gpt_id: str, updated_use_cases: list):
     Update the list of usecases in the "usecase" collection
     """
     usecases_collection = await get_collection("usecases")
-    existing_use_cases = await usecases_collection.find({"_id": ObjectId(gpt_id)}).to_list(None)
+    existing_use_cases = await usecases_collection.find({"gpt_id": ObjectId(gpt_id)}).to_list(None)
 
     if existing_use_cases is not None and len(existing_use_cases) > 0:
         # Delete the existing use cases
