@@ -38,7 +38,7 @@ def create_app_directories():
     os.makedirs(STATIC_SCRIPTS_FOLDER, exist_ok=True)
     os.makedirs(STATIC_CSS_FOLDER, exist_ok=True)
 
-async def handle_upload_files(gpt: GPTData, files: list[UploadFile]):
+async def handle_upload_files(gpt_id: str, gpt: GPTData, files: list[UploadFile]):
     # Additional validation (you can add more checks here, like file type validation)
     if gpt.use_rag:
         total_size = sum(file.size for file in files)
@@ -75,7 +75,8 @@ async def handle_upload_files(gpt: GPTData, files: list[UploadFile]):
                             # Assuming gpt_id is available in the gpt object
                             # for usecase in usecases:
                             #     usecase['gpt_id'] = gpt.gpt_id
-                            await update_usecases(usecases)
+                            #logger.info(f"GPT {gpt}")
+                            await update_usecases(gpt_id, usecases)
                             file_upload_status += f"File {uploadedFile.filename} processed and database updated successfully."
                     except Exception as e:
                         file_upload_status += f"Error processing file: {str(e)}"
@@ -240,13 +241,13 @@ async def count_tokens(text: str, model_name: str) -> int:
     return tokens
 
 
-async def get_token_count(model_name, system_message,  conversations, user_message, max_tokens):
+async def get_token_count(model_name, system_message,  conversations, user_message, max_tokens: int = 0):
     # Construct the token request
     # Remove the system message from the conversation history
     user_conversations: str = ""
     for msg in conversations:
         if msg["role"] != "system":
-            user_conversations += msg["content"] + " "
+            user_conversations += str(msg["content"])+ " "
 
     # Calculate tokens for each component
     system_tokens = await count_tokens(system_message, model_name)

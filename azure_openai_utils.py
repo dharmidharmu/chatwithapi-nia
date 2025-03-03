@@ -498,9 +498,9 @@ async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, 
         logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
         return StreamingResponse(iter([str(e)]), media_type="text/event-stream")
     
-async def preprocessForRAG(user_message: str, image_response:str, use_case:str, gpt: GPTData, conversations: list):
+async def preprocessForRAG(user_message: str, image_response:str, use_case:str, gpt: GPTData, conversations: list, model_configuration: ModelConfiguration):
     
-    context_information, conversations = await determineFunctionCalling(user_message, image_response, use_case, gpt, conversations)
+    context_information, conversations = await determineFunctionCalling(user_message, image_response, use_case, gpt, conversations, model_configuration)
 
     # Step 4: Append the current user query with additional context into the conversation. 
     # This additional context is only to generate the response from the model and won't be saved in the conversation history for aesthetic reasons.
@@ -514,6 +514,9 @@ async def preprocessForRAG(user_message: str, image_response:str, use_case:str, 
                             })
     else:
         conversations.append({"role": "user", "content": user_message})
+    
+    token_data = await get_token_count(gpt["name"], gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+    logger.info(f"Token Calculation : stage 1.3 - preprocessForRAG {token_data}")
 
 async def processImage(streaming_response: bool, save_response_to_db: bool, user_message: str, model_configuration: ModelConfiguration, gpt: GPTData, conversations: list, uploadedImage: UploadFile = None):
     image_url = ""
@@ -557,6 +560,9 @@ async def processImage(streaming_response: bool, save_response_to_db: bool, user
                 #"content": f"data:image/jpeg;base64,{base64_image}"
                 "content": image_url
             })
+
+            token_data = await get_token_count(gpt["name"], gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+            logger.info(f"Token Calculation : stage 1.1 - Image analysis {token_data}")
 
             # 5. Call Azure OpenAI API for image analysis
             if streaming_response:
@@ -609,7 +615,8 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
     #     context_information = await get_data_from_azure_search(user_message, use_case)
 
     # Step 1 : Get last conversation history 
-    chat_history = await fetch_chat_history(gpt["_id"], model_name, limit=-1) # We need entire conversation history to be passed to the model
+    #chat_history = await fetch_chat_history(gpt["_id"], model_name, limit=-1) # We need entire conversation history to be passed to the model
+    chat_history = await fetch_chat_history(gpt["_id"], model_name, limit=6)
     
     # Step 3: Format the conversation to support OpenAI format (System Message, User Message, Assistant Message)
     conversations = [{"role": "system", "content": gpt["instructions"]}]
@@ -618,7 +625,7 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
 
     # Construct the token request
     token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
-    logger.info(f"Token Calculation is {token_data}")
+    logger.info(f"Token Calculation : stage 1 {token_data}")
     
     # Get previous conversation for context
     #previous_conversations = get_previous_context_conversations(conversation_list=conversations, previous_conversations_count=previous_conversations_count)
@@ -658,11 +665,11 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
         if image_response is not None:
             conversations.append({"role": "user", "content": user_message})
             conversations.append({"role": "assistant", "content": "Image Analysis Result : " + image_response.get("model_response")})
-            await preprocessForRAG(user_message, image_response, use_case, gpt, conversations)
+            await preprocessForRAG(user_message, image_response, use_case, gpt, conversations, model_configuration)
     elif use_rag and not has_image:
         logger.info("CASE 3 : RAG and No Image")
         proceed = True
-        await preprocessForRAG(user_message, DEFAULT_IMAGE_RESPONSE, use_case, gpt, conversations)
+        await preprocessForRAG(user_message, DEFAULT_IMAGE_RESPONSE, use_case, gpt, conversations, model_configuration)
         conversations.append({"role": "user", "content": user_message})
     else:
         logger.info("CASE 4 : No RAG and No Image")
@@ -671,8 +678,8 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
         conversations.append({"role": "user", "content": user_message})
         
     # Step 7: Get the token count after the user message is added to the conversation
-    # token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
-    # logger.info(f"Token Calculation2 is {token_data}")
+    token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+    logger.info(f"Token Calculation : stage 2 (Before generating response) {token_data}")
 
     # Azure OpenAI API call
     if proceed == True:
@@ -839,7 +846,7 @@ async def summarize_conversations(chat_history, gpt):
 
     return conversation_summary
 
-async def determineFunctionCalling(search_query: str, image_response: str, use_case: str, gpt: GPTData, conversations: list):
+async def determineFunctionCalling(search_query: str, image_response: str, use_case: str, gpt: GPTData, conversations: list, model_configuration: ModelConfiguration):
     function_calling_conversations = []
     data = []
     deployment_name = gpt["name"]
@@ -934,6 +941,8 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
         logger.error(f"Error occurred while calling the function: {e}", exc_info=True)
         function_calling_model_response = "ERROR#####" + str(e)
     finally:
+        token_data = await get_token_count(gpt["name"], gpt["instructions"],  function_calling_conversations, search_query, int(model_configuration["max_tokens"]))
+        logger.info(f"Token Calculation : stage 1.2 - Function calling {token_data}")
         function_calling_conversations.clear() # Clear the messages list because we do not need the system message, user message in this function
         logger.info(f"function_calling_model_response {function_calling_model_response}")
 

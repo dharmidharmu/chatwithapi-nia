@@ -265,16 +265,21 @@ async def convert_json_to_mongo_format(json_data):
 
     return converted_data
 
-async def update_usecases(use_cases):
+async def update_usecases(gpt_id: str, updated_use_cases: list):
     """
     Update the list of usecases in the "usecase" collection
     """
     usecases_collection = await get_collection("usecases")
+    existing_use_cases = await usecases_collection.find({"_id": ObjectId(gpt_id)}).to_list(None)
+
+    if existing_use_cases is not None and len(existing_use_cases) > 0:
+        # Delete the existing use cases
+        await usecases_collection.delete_many({"gpt_id": ObjectId(gpt_id)})
+        logger.info(f"Deleted existing usecases for {gpt_id} successfully.")
 
     # Insert the new list of use cases into the collection
-    use_cases = await convert_json_to_mongo_format(use_cases)
-    result = await usecases_collection.insert_many(use_cases)
-
+    updated_use_cases = await convert_json_to_mongo_format(updated_use_cases)
+    result = await usecases_collection.insert_many(updated_use_cases)
     logger.info(f"{result.inserted_ids} Updated usecases successfully.")
 
 async def update_orders(orders):

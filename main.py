@@ -354,7 +354,7 @@ async def create_gpt(request: Request, loggedUser: str = Cookie(None), gpt: str 
             file_upload_status = ""
 
             if gpt.use_rag:
-                file_upload_status = await handle_upload_files(gpt, files)
+                file_upload_status = await handle_upload_files(gpt_id, gpt, files)
                 logger.info(f"RAG Files uploaded successfully: {file_upload_status}")
         
             response = JSONResponse({"message": "GPT created successfully!", "gpt_id": gpt_id, "file_upload_status" : file_upload_status})
@@ -479,7 +479,7 @@ async def modify_gpt(request: Request, gpt_id: str, gpt_name: str, gpt: str = Bo
             file_upload_status = ""
 
             if gpt.use_rag:
-                file_upload_status = await handle_upload_files(gpt, files)
+                file_upload_status = await handle_upload_files(gpt_id, gpt, files)
                 logger.info(f"RAG Files uploaded successfully: {file_upload_status}")
                 
             if result.modified_count == 1:
