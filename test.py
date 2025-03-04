@@ -1,0 +1,7 @@
+main_response = """'### Order Summary for Chris Miller\n\n**Total Matching Orders Found:** 6  \n**Total Customer Order Value:** $1,200\n\nHere are the details of the orders placed by Chris Miller:\n\n| Order ID | Product Description | Price | Status          | Order Date   | Delivery Date |\n|----------|---------------------|-------|-----------------|--------------|---------------|\n| OR00147  | 4K Webcam           | $150  | Return Processed| 07-11-2022   | 07-20-2022    |\n| OR00065  | Streaming Stick     | $50   | Delivered       | 08-01-2024   | 08-05-2024    |\n| OR00061  | Headphones          | $199  | Processing      | 11-22-2022   | 11-30-2022    |\n| OR00008  | USB-C Charger       | $45   | Delivered       | 06-25-2024   | 06-29-2024    |\n| OR00109  | Gaming Monitor      | $429  | Return Processed| 10-04-2022   | 10-15-2022    |\n| OR00042  | Drone with Camera   | $799  | In Transit      | 08-09-2024   | 08-13-2024    |\n\nIf you need further details about any specific order or have other inquiries, please let me know.\n\n###### \n1. Would you like more detailed information about any specific order?\n2. Are there any issues with the orders that need resolution?\n3. Do you need assistance with tracking the order that is currently in transit?"""
+
+follow_up_questions = (main_response.split("######")[1].strip()).split("\n")
+main_response = main_response.split("######")[0].strip()
+
+print(f"main_response: {main_response}")
+print(f"follow_up_questions: {follow_up_questions}")

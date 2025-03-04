@@ -600,6 +600,36 @@ CONTEXTUAL_PROMPT = """
 #     } 
 # }
 
+ALL_FIELDS = [
+    "product_id",
+    "product_description",
+    "product_specification",
+    "product_category",
+    "qty",
+    "order_date",
+    "order_id",
+    "brand",
+    "price",
+    "order_total",
+    "delivery_date",
+    "status",
+    "agent_contact_number",
+    "return_policy",
+    "return_days",
+    "user_name",
+    "password",
+    "email",
+    "phone_number",
+    "country",
+    "age",
+    "shipping_address",
+    "customer_rating",
+    "customer_reviews",
+    "review_sentiment",
+    "payment_method",
+    "payment_status"
+]
+
 USE_CASE_CONFIG = {
     "SEARCHING_ORDERS": {
         "user_message": """You are an e-commerce assistant specialized in order information retrieval.

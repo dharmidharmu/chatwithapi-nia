@@ -7,6 +7,7 @@ class Message(BaseModel):
     gpt_id: str
     role: str  
     content: str
-    #user_name: str
+    use_case_id: str
+    user_name: str
     created_at: str = datetime.now().isoformat()
     hiddenFlag: bool

@@ -26,7 +26,7 @@ from standalone_programs.image_analyzer import analyze_image
 from dotenv import load_dotenv # For environment variables (recommended)
 
 from mongo_service import fetch_chat_history, delete_chat_history, update_message
-from role_mapping import FORMAT_RESPONSE_AS_MARKDOWN, FUNCTION_CALLING_USER_MESSAGE, NIA_SEMANTIC_CONFIGURATION_NAME, USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
+from role_mapping import ALL_FIELDS, FORMAT_RESPONSE_AS_MARKDOWN, FUNCTION_CALLING_USER_MESSAGE, NIA_SEMANTIC_CONFIGURATION_NAME, USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
 from standalone_programs.simple_gpt import run_conversation, ticket_conversations, get_conversation
 from routes.ilama32_routes import chat2
 
@@ -38,7 +38,6 @@ load_dotenv()  # Load environment variables from .env file
 logger = logging.getLogger(__name__)
 
 token_encoder = tiktoken.encoding_for_model("gpt-4o") 
-
 
 # Model = should match the deployment name you chose for your model deployment
 delimiter = "```"
@@ -195,7 +194,9 @@ async def saveAssistantResponse(response: str, gpt: GPTData, conversations: list
             "gpt_id": gpt["_id"], # Make sure gpt is accessible here
             "gpt_name": gpt["name"], # Make sure gpt is accessible here
             "role": "assistant",
-            "content": response
+            "content": response,
+            "user": gpt["user"],
+            "use_case_id": gpt["use_case_id"],
         })
 
         conversations.append({"role": "assistant", "content": response}) # Append the response to the conversation history
@@ -212,7 +213,7 @@ async def get_completion_from_messages_standard(gpt: GPTData, model_configuratio
     try:
         # Get Azure Open AI Client and fetch response
         client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
-        model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
+        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
         extra_body = {}
         
         if gpt["use_rag"] == True:
@@ -280,7 +281,7 @@ async def get_completion_from_messages_stream(gpt: GPTData, model_configuration,
     try:
         # Get Azure Open AI Client and fetch response
         client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, True)
-        model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
+        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
         extra_body = {}
 
         if gpt["use_rag"] == True:
@@ -371,7 +372,7 @@ async def get_completion_from_messages_default(model_name: str, use_rag: bool, m
 
     # Get Azure Open AI Client and fetch response
     client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
-    model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
+    model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
 
     try:
         response = await client.chat.completions.create(
@@ -404,7 +405,7 @@ async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration
     # Get Azure Open AI Client and fetch response
     #client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version, False)
     client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
-    model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
+    model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
 
     try:
         response = await client.chat.completions.create(
@@ -446,7 +447,7 @@ async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, 
     # Get Azure Open AI Client and fetch response
     #client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version, True)
     client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, True)
-    model_configuration: ModelConfiguration = ModelConfiguration(**model_configuration)
+    model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
 
     try:
         full_response_content = ""
@@ -515,7 +516,7 @@ async def preprocessForRAG(user_message: str, image_response:str, use_case:str, 
     else:
         conversations.append({"role": "user", "content": user_message})
     
-    token_data = await get_token_count(gpt["name"], gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+    token_data = await get_token_count(gpt["name"], gpt["instructions"],  conversations, user_message, int(model_configuration.max_tokens))
     logger.info(f"Token Calculation : stage 1.3 - preprocessForRAG {token_data}")
 
 async def processImage(streaming_response: bool, save_response_to_db: bool, user_message: str, model_configuration: ModelConfiguration, gpt: GPTData, conversations: list, uploadedImage: UploadFile = None):
@@ -558,10 +559,12 @@ async def processImage(streaming_response: bool, save_response_to_db: bool, user
                 "gpt_name": gpt["name"],
                 "role": "user",
                 #"content": f"data:image/jpeg;base64,{base64_image}"
-                "content": image_url
+                "content": image_url,
+                "user": gpt["user"],
+                "use_case_id": gpt["use_case_id"]
             })
 
-            token_data = await get_token_count(gpt["name"], gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+            token_data = await get_token_count(gpt["name"], gpt["instructions"],  conversations, user_message, int(model_configuration.max_tokens))
             logger.info(f"Token Calculation : stage 1.1 - Image analysis {token_data}")
 
             # 5. Call Azure OpenAI API for image analysis
@@ -606,10 +609,12 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
 
     instruction_data = gpt["instructions"].split("@@@@@")
     use_case = instruction_data[0]
-    role_information, model_configuration = await get_role_information(use_case)
     previous_conversations_count = 6
     proceed = False
     model_name = gpt["name"]
+    use_rag = bool(gpt["use_rag"])
+    role_information, model_configuration = await get_role_information(use_case) if use_rag else ("AI Assistant", model_configuration)
+    model_configuration = ModelConfiguration(**model_configuration)
 
     # if gpt["name"] == "ecommerce-rag-demo":
     #     context_information = await get_data_from_azure_search(user_message, use_case)
@@ -624,7 +629,7 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
         conversations.append({"role": msg["role"], "content": msg["content"]})
 
     # Construct the token request
-    token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+    token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration.max_tokens))
     logger.info(f"Token Calculation : stage 1 {token_data}")
     
     # Get previous conversation for context
@@ -635,10 +640,12 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
         "gpt_id": gpt["_id"],
         "gpt_name": gpt["name"],
         "role": "user",
-        "content": f"{user_message}", 
+        "content": f"{user_message}",
+        "user": gpt["user"],
+        "use_case_id": gpt["use_case_id"]
     })
         
-    use_rag = gpt["use_rag"]
+    
     has_image = (uploadedFile is not None and uploadedFile.filename != "blob" and uploadedFile.filename != "dummy")
     has_file = has_image and uploadedFile.filename.endswith(".pdf")
     DEFAULT_IMAGE_RESPONSE = ""
@@ -678,7 +685,7 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
         conversations.append({"role": "user", "content": user_message})
         
     # Step 7: Get the token count after the user message is added to the conversation
-    token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration["max_tokens"]))
+    token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration.max_tokens))
     logger.info(f"Token Calculation : stage 2 (Before generating response) {token_data}")
 
     # Azure OpenAI API call
@@ -750,7 +757,11 @@ async def get_data_from_azure_search(search_query: str, use_case: str):
         logger.info(f"Search Client: {azure_ai_search_client} \nSearch Query: {search_query}")
 
         # Get the documents
-        selected_fields = USE_CASE_CONFIG[use_case]["fields_to_select"]
+        if use_case == "REVIEW_BYTES" or use_case == "COMPLAINTS_AND_FEEDBACK" or use_case == "SEASONAL_SALES" or use_case == "DOC_SEARCH":
+            selected_fields = USE_CASE_CONFIG[use_case]["fields_to_select"]
+        else:
+            selected_fields = ALL_FIELDS 
+
         logger.info(f"Selected Fields: {selected_fields}")
         #selected_fields = ["user_name", "order_id", "product_description", "brand", "order_date", "status", "delivery_date"]
         search_results = azure_ai_search_client.search(search_text=search_query, 
@@ -835,7 +846,8 @@ async def summarize_conversations(chat_history, gpt):
                     {"role": "user", "content": summarization_user_prompt }
                    ]
 
-        model_configuration: ModelConfiguration = ModelConfiguration(**SUMMARIZE_MODEL_CONFIGURATION)
+        #model_configuration: ModelConfiguration = ModelConfiguration(**SUMMARIZE_MODEL_CONFIGURATION)
+        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**SUMMARIZE_MODEL_CONFIGURATION)
 
         # Get Azure Open AI Client and fetch response
         conversation_summary = await get_completion_from_messages_default(DEFAULT_MODEL_NAME, messages, model_configuration)
@@ -941,7 +953,7 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
         logger.error(f"Error occurred while calling the function: {e}", exc_info=True)
         function_calling_model_response = "ERROR#####" + str(e)
     finally:
-        token_data = await get_token_count(gpt["name"], gpt["instructions"],  function_calling_conversations, search_query, int(model_configuration["max_tokens"]))
+        token_data = await get_token_count(gpt["name"], gpt["instructions"],  function_calling_conversations, search_query, int(model_configuration.max_tokens))
         logger.info(f"Token Calculation : stage 1.2 - Function calling {token_data}")
         function_calling_conversations.clear() # Clear the messages list because we do not need the system message, user message in this function
         logger.info(f"function_calling_model_response {function_calling_model_response}")

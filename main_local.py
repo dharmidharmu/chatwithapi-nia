@@ -29,7 +29,7 @@ from data.GPTData import GPTData
 from data.ModelConfiguration import ModelConfiguration
 from gpt_utils import handle_upload_files, create_folders
 from azure_openai_utils import generate_response, get_azure_openai_deployments, call_maf
-from mongo_service import get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message
+from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message
 from routes.ilama32_routes import router as ilama32_router
 
 import uvicorn
@@ -342,9 +342,10 @@ async def create_gpt(request: Request, loggedUser: str = Cookie(None), gpt: str 
 
         if loggedUser != None and loggedUser != "N/A":
             gpt["user"] = loggedUser
+            gpt["use_case_id"] = ""
             # Now you can access gpt as a dictionary
             gpt = GPTData(**gpt)  # Validate and create GPTData instance
-            logger.info(f"Received GPT data: {gpt}")
+            #logger.info(f"Received GPT data: {gpt}")
 
             if files != None and len(files) > 0:
                 for file in files:
@@ -396,7 +397,7 @@ async def chat(request: Request, gpt_id: str, gpt_name: str, user_message: str =
          # Parse the JSON string into a dictionary
         model_configuration = json.loads(params)
         model_configuration = ModelConfiguration(**model_configuration)  
-        logger.info(f"Received GPT data: {gpt} \n Model Configuration: {model_configuration}")
+        #logger.info(f"Received GPT data: {gpt} \n Model Configuration: {model_configuration}")
 
         if gpt is None:
             return JSONResponse({"error": "GPT not found."}, status_code=404)
@@ -466,6 +467,7 @@ async def modify_gpt(request: Request, gpt_id: str, gpt_name: str, gpt: str = Bo
             # Parse the JSON string into a dictionary
             gpt = json.loads(gpt)
             gpt["user"] = loggedUser
+            gpt["use_case_id"] = gpt.get("use_case_id", "") 
         
             # Now you can access gpt as a dictionary
             gpt = GPTData(**gpt)  # Validate and create GPTData instance
@@ -531,6 +533,34 @@ async def get_chat_history(gpt_id: str, gpt_name: str):
     logger.info(f"Fetching chat history for GPT: {gpt_id} Name: {gpt_name}")
 
     chat_history = await fetch_chat_history(gpt_id, gpt_name, max_tokens_in_conversation)  # Fetch chat history from MongoDB
+    #logger.info(f"Chat history {chat_history}")
+
+    # After saving the image, read its contents and encode the image as base64
+    # The image URL will be saved in the chat. Use the URL to pick the image from the server
+    for chat in chat_history:
+        if "chatimages" in chat["content"]:
+            uploads_directory = os.path.dirname(__file__)
+            imagePath = os.path.join(uploads_directory, chat["content"])
+            logger.info(f"Image URL found in chat history {imagePath}")
+            #chat["content"] = imagePath
+
+    if chat_history is None or chat_history == []:
+        response = JSONResponse({"error": "No Chats in the GPT"}, status_code=404)
+    else:
+        #reverse the list for linear view or to see proper conversation flow
+        response = JSONResponse({"chat_history": chat_history[::-1], "token_count": len(chat_history)}, status_code=200) 
+
+    return response
+
+@app.get("/chat_history/{gpt_id}/{gpt_name}/{use_case_id}")
+async def get_chat_history_for_use_case(gpt_id: str, gpt_name: str, use_case_id: str = "all"):
+    logger.info(f"Fetching chat history for GPT: {gpt_id} Name: {gpt_name}")
+
+    if use_case_id == "all":
+        chat_history = await fetch_chat_history(gpt_id, gpt_name, max_tokens_in_conversation)
+    else:
+        chat_history = await fetch_chat_history_for_use_case(use_case_id, gpt_id, gpt_name, max_tokens_in_conversation)  # Fetch chat history from MongoDB
+    logger.info(f"Chat history {chat_history}")
 
     # After saving the image, read its contents and encode the image as base64
     # The image URL will be saved in the chat. Use the URL to pick the image from the server

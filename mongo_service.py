@@ -49,7 +49,6 @@ async def create_new_gpt(gpt: GPTData):
 
         # Insert GPT data into MongoDB
         result: InsertOneResult = await gpts_collection.insert_one(vars(gpt))
-
         gpt_id = str(result.inserted_id)
 
         # Get the inserted _id
@@ -60,17 +59,25 @@ async def create_new_gpt(gpt: GPTData):
 
     return gpt_id
 
-async def update_gpt(gpt_id: str, gpt_name: str, gpt: GPTData):
+async def update_gpt(gpt_id: str, gpt_name: str, updated_gpt: GPTData):
+    result = None
     gpts_collection = await get_collection("gpts")
+    gpt: GPTData = await gpts_collection.find_one({"_id": ObjectId(gpt_id)})
 
-    # while updating gpt, update in messages table as well to maintain consistency
-    result: UpdateResult = await gpts_collection.update_one(
-        {"_id": ObjectId(gpt_id)}, 
-        {"$set": dict(gpt)}
-    )
+    if gpt is not None:
+        gpt["instructions"] = updated_gpt.instructions
+        gpt["use_rag"] = updated_gpt.use_rag
+        gpt["user"] = updated_gpt.user
+        gpt["description"] = updated_gpt.description
 
-    # Update in messages table as well to maintain consistency
-    await update_system_message(gpt_id, gpt.instructions)
+        # while updating gpt, update in messages table as well to maintain consistency
+        result: UpdateResult = await gpts_collection.update_one(
+            {"_id": ObjectId(gpt_id)}, 
+            {"$set": dict(gpt)}
+        )
+
+        # Update in messages table as well to maintain consistency
+        await update_system_message(gpt_id, updated_gpt.description)
 
     logger.info(f"Updated GPT: {gpt_name} successfully.")
 
@@ -89,14 +96,21 @@ async def update_gpt_instruction(gpt_id: str, gpt_name: str, usecase_id: str, lo
         logger.error(f"Use case with ID: {usecase_id} not found.")
         return None
     else:
-        result: UpdateResult = await gpts_collection.update_one(
-            {"_id": ObjectId(gpt_id)},
-            {"$set": {"instructions": useCase["name"] +"@@@@@\n"+ useCase["instructions"] + "\n" + SYSTEM_SAFETY_MESSAGE, "user": loggedUser}}
-        )
+        # get the gpt 
+        gpt: GPTData = gpts_collection.find_one({"_id": ObjectId(gpt_id)})
+        if gpt is not None:
+            # Update the instruction in the GPT collection
+            result: UpdateResult = await gpts_collection.update_one(
+                {"_id": ObjectId(gpt_id)},
+                {"$set": {"instructions": useCase["name"] +"@@@@@\n"+ useCase["instructions"] + "\n" + SYSTEM_SAFETY_MESSAGE, 
+                          "user": loggedUser, 
+                          "use_case_id": usecase_id}}
+            )
 
-        # Update in messages table as well to maintain consistency
-        await update_system_message(gpt_id, useCase["instructions"])
-        logger.info(f"Updated GPT instruction for GPT: {gpt_name} successfully.")
+            # Update in messages table as well to maintain consistency
+            await update_system_message(gpt_id, useCase["instructions"])
+
+        logger.info(f"Updated GPT instruction for GPT: {gpt_name} successfully. {result}")
 
         return result
     
@@ -130,6 +144,7 @@ async def fetch_chat_history(gpt_id: str, gpt_name: str, limit: int):
         chat history without limit we use in the conversation context
     """
     messages_collection = await get_collection("messages")
+    chat_history = []
 
     if gpt_name == "export_pdf":
         chat_history = await messages_collection.find({"gpt_id": ObjectId(gpt_id), "role" : {"$ne": "system"}, "hiddenFlag" : False}).sort("created_at", ASCENDING).to_list(None)
@@ -139,6 +154,28 @@ async def fetch_chat_history(gpt_id: str, gpt_name: str, limit: int):
         else:
             chat_history = await messages_collection.find({"gpt_id": ObjectId(gpt_id), "name" : {"$ne": ignored_content}, "hiddenFlag" : False}).sort("created_at", ASCENDING).to_list(None) #discard message content with ignored_content
 
+    if chat_history is not None:
+        chat_history = list(chat_history)
+
+        # Convert ObjectId to string (_id and gpt_id)
+        for chat in chat_history:
+            chat["_id"] = str(chat["_id"])
+            chat["gpt_id"] = str(chat["gpt_id"]) 
+    
+        logger.info(f"Chat History Length for {gpt_name}: {len(chat_history)}")
+
+    return chat_history
+
+async def fetch_chat_history_for_use_case(use_case_id: str, gpt_id: str, gpt_name: str, limit: int = 10): 
+    """ 
+        chat history with limit we use to show in the UI
+        chat history without limit we use in the conversation context
+    """
+    messages_collection = await get_collection("messages")
+    chat_history = []
+    
+    chat_history = await messages_collection.find({"gpt_id": ObjectId(gpt_id), "role" : {"$ne": "system"}, "hiddenFlag" : False, "use_case_id" : use_case_id}).sort("created_at", DESCENDING).limit(limit).to_list(None) #only the last 10 conversations are picked. Since we are using the same call for adding to the conversations we have the same answer repeating problem
+    logger.info(f"Chat History {chat_history}")
     if chat_history is not None:
         chat_history = list(chat_history)
 
@@ -196,7 +233,9 @@ async def update_message(message: dict):
         "role": message["role"],
         "content": message["content"],
         "created_at": date.datetime.now().isoformat(),
-        "hiddenFlag" : False
+        "hiddenFlag" : False,
+        "user": message["user"],
+        "use_case_id": message["use_case_id"]
     })
 
 async def update_system_message(gpt_id: str, system_message: str) -> UpdateResult:
@@ -204,6 +243,10 @@ async def update_system_message(gpt_id: str, system_message: str) -> UpdateResul
     logger.info(f"Updating system message for GPT ID: {gpt_id} and system message: {system_message}")
 
     messages_collection = await get_collection("messages")
+    gpts_collection = await get_collection("gpts")
+
+    # Get the gpt
+    gpt: GPTData = await gpts_collection.find_one({"_id": ObjectId(gpt_id)})
 
     # fetch the respective record from the messages collection
     message: Message = await messages_collection.find_one({"gpt_id": ObjectId(gpt_id), "role": "system"})
@@ -215,7 +258,9 @@ async def update_system_message(gpt_id: str, system_message: str) -> UpdateResul
             "role": "system",
             "content": system_message,
             "created_at": date.datetime.now().isoformat(),
-            "hiddenFlag" : False
+            "hiddenFlag" : False,
+            "user": gpt["user"],
+            "use_case_id": gpt["use_case_id"]
         })
         logger.info(f"Created New Message to update instruction for GPT ID: {gpt_id} successfully.")
         return result
@@ -223,7 +268,9 @@ async def update_system_message(gpt_id: str, system_message: str) -> UpdateResul
     else:
         result: UpdateResult = await messages_collection.update_one(
             {"_id": ObjectId(message["_id"])},
-            {"$set": {"content": system_message}}
+            {"$set": {"content": system_message,
+                      "user": gpt["user"],
+                      "use_case_id": gpt["use_case_id"]}}
         )
 
         logger.info(f"Updated GPT instruction for GPT ID: {gpt_id} successfully.")
@@ -348,7 +395,8 @@ async def get_gpts_for_user(username):
     gpts_collection = await get_collection("gpts")
     gpts = await gpts_collection.find({'user': username}).to_list(None) # Get all GPTs from MongoDB
     for gpt in gpts:
-        gpt["_id"] = str(gpt["_id"]) # Convert ObjectId to string
+        gpt["_id"] = str(gpt.get("_id", "")) # Convert ObjectId to string
+        gpt["use_case_id"] = str(gpt.get("use_case_id", "")) # Convert ObjectId to string or set to empty string if not available
 
     return gpts
 

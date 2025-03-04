@@ -129,7 +129,7 @@ This uses a regular expression to match the content inside the Markdown code blo
 The r'\1' part replaces the whole match with the content inside the captured group, effectively removing the Markdown code block formatting.
 The flags=re.DOTALL argument allows the dot (.) in the regex to match newline characters, ensuring that the entire content inside the code block is captured, even if it spans multiple lines.
 """
-def extract_response(response):
+async def extract_response(response):
     extracted_text = ""
 
     try:
@@ -143,22 +143,13 @@ def extract_response(response):
         if response.find('### Response') != -1:
             extracted_text = response.split('### Response')[1].strip()
         else:
-            extracted_text = extract_response_via_delimiter(response, "{", "}")
+            extracted_text = await extract_response_via_delimiter(response, "{", "}")
 
     logger.info(f"Extracted Text: {extracted_text}")
 
-    return parse_json(extracted_text)
+    return await parse_json(extracted_text)
 
-def extract_response_via_delimiter(response, start, end):
-    extracted_text = ""
-
-    start_index = response.find(start)
-    end_index = response.rfind(end) + 1
-    extracted_text = response[start_index:end_index].strip()
-
-    return extracted_text
-
-def parse_json(extracted_text):
+async def parse_json(extracted_text):
     return json.loads(extracted_text)
 
 # data = """{\n    "model_response": "Here are the details of order OR00147: The requested information is not available in the retrieved data. Please try another query or topic.",\n    "follow_up_questions": [\n        "Can you provide any additional information about the order?",\n        "Do you have any other order numbers that I can help you with?",\n        "Is there anything else I can assist you with?"\n    ]\n}"""
@@ -204,9 +195,18 @@ def trim_conversation_history(conversation_history, max_tokens):
     
     return conversation_history
 
+async def extract_response_via_delimiter(response, start, end):
+    extracted_text = ""
+
+    start_index = response.find(start)
+    end_index = response.rfind(end) + 1
+    extracted_text = response[start_index:end_index].strip()
+
+    return extracted_text
+
 async def extract_json_content(response):
-    total_tokens = response.usage.total_tokens
-    main_response = response.choices[0].message.content
+    total_tokens: int = response.usage.total_tokens
+    main_response: str = response.choices[0].message.content
     follow_up_questions=[]
 
     # Find content between json``` and ```
@@ -222,6 +222,15 @@ async def extract_json_content(response):
             main_response = main_response.replace(json_match.group(0), '').strip()
         except json.JSONDecodeError as je:
             logger.info(f"exception occurred while json pattern selected {str(je)}")
+    # elif main_response.find("######") != -1:
+    #     # maintain the call for extracted_text and main_response, because we are using the same variable model_response in the split.
+    #     # So, while extracted_text call, if main_response is stripped first, you will get index out of bounds
+    #     extracted_text = main_response.split("######")[1].strip()
+    #     main_response = main_response.split("######")[0].strip()
+    #     follow_up_questions = extracted_text.split('\n')
+    # else:
+    #     main_response = response
+    #     follow_up_questions = []
 
     return main_response, follow_up_questions, total_tokens 
 

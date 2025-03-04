@@ -9,5 +9,6 @@ class GPTData(BaseModel):
     instructions: str
     use_rag: bool = False
     user: str
+    use_case_id: str
     #token_count: int
     created_at: str = datetime.now().isoformat()
