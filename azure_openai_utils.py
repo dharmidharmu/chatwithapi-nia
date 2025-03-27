@@ -870,6 +870,9 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
         azure_endpoint=GPT_4o_ENDPOINT_URL, 
         api_key=GPT_4o_API_KEY, 
         api_version=GPT_4o_API_VERSION)
+    
+    if use_case == "TRACKING_ORDERS_TKE":
+        search_query = search_query + "(TKE)"
 
     # Initial user message
     function_calling_conversations.append({"role": "system", "content":FUNCTION_CALLING_SYSTEM_MESSAGE}) # Single function call
