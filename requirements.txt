@@ -1,30 +1,30 @@
 aiohttp
 azure-common==1.1.28
-azure-core==1.30.2
-azure-identity==1.17.1 # To use the credentials with Azure SDK.
+azure-core==1.32.0
+azure-identity==1.21.0 # To use the credentials with Azure SDK.
 azure-mgmt-cognitiveservices # To interact with the Cognitive Services Management API.
 #azure-search-documents==11.5.1
 azure-search-documents==11.6.0b1
-azure-storage-blob==12.24.1
+azure-storage-blob==12.25.0
 fastapi==0.115.2
-fastapi-cli==0.0.5
-httpx==0.27.2
+fastapi-cli==0.0.7
+httpx==-0.28.1
 ipykernel
 motor==3.7.0 # Motor, an asynchronous MongoDB driver, is the recommended library for handling MongoDB connections in FastAPI.
 msal==1.31.0 # Microsoft Authentication Library for Python.
 msal-extensions==1.2.0
-openai==1.43.1
+openai==1.68.2
 passlib
 pipreqs==0.5.0
-pydantic==2.9.0
-pydantic_core==2.23.2
+pydantic==2.10.6
+pydantic_core==2.27.2
 python-multipart
 pymongo==4.9.1
 python-dotenv==1.0.1
 python-jose[cryptography]
 requests==2.32.3
-starlette==0.40.0
+starlette==0.46.1
 starlette[sessions]
 starlette[full]
 tiktoken==0.9.0
-uvicorn==0.32.0
+uvicorn==0.34.0

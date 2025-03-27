@@ -93,12 +93,10 @@ origins = [
             "https://customgptapp.azurewebsites.net:443",
             "https://customgptapp2.azurewebsites.net", 
             "https://customgptapp2.azurewebsites.net:443",
-            "https://niaapp.azurewebsites.net",
-            "https://niaapp.azurewebsites.net:443"
-            "https://niaapp2.azurewebsites.net",
-            "https://niaapp2.azurewebsites.net:443"
             "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net",
-            "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net:443"
+            "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net:443",
+            "https://niacustomgpt-fybhf3hmfbgba7dp.southindia-01.azurewebsites.net",
+            "https://niacustomgpt-fybhf3hmfbgba7dp.southindia-01.azurewebsites.net:443",
           ]
 
 middleware = [

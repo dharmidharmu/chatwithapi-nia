@@ -14,6 +14,7 @@ NIA_COMPLAINTS_AND_FEEDBACK_INDEX_NAME=os.getenv("NIA_COMPLAINTS_AND_FEEDBACK_IN
 NIA_SEASONAL_SALES_INDEX_NAME=os.getenv("NIA_SEASONAL_SALES_INDEX_NAME")
 NIA_REVIEW_BYTES_INDEX_NAME=os.getenv("NIA_REVIEW_BYTES_INDEX_NAME")
 NIA_PDF_SEARCH_INDEX_NAME = os.getenv('NIA_PDF_SEARCH_INDEX_NAME') #Virtimo Changes
+NIA_TKE_RAG_INDEX=os.getenv("NIA_TKE_RAG_INDEX")
 
 NIA_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_SEMANTIC_CONFIGURATION_NAME")
 NIA_COMPLAINTS_AND_FEEDBACK_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_COMPLAINTS_AND_FEEDBACK_SEMANTIC_CONFIGURATION_NAME")
@@ -22,6 +23,7 @@ NIA_GENERATE_MAILS_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_GENERATE_MAILS_SEM
 NIA_SEASONAL_SALES_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_SEASONAL_SALES_SEMANTIC_CONFIGURATION_NAME")
 NIA_REVIEW_BYTES_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_REVIEW_BYTES_SEMANTIC_CONFIGURATION_NAME")
 NIA_VIRTIMO_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME = os.getenv('NIA_VIRTIMO_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME')
+NIA_TKE_RAG_SEMANTIC_CONFIGURATION=os.getenv("NIA_TKE_RAG_SEMANTIC_CONFIGURATION")
 
 # Configure LLM Parameters
 DEFAULT_MODEL_CONFIGURATION = {
@@ -713,42 +715,83 @@ Remember to maintain a balanced perspective, representing both positive and nega
     "TRACK_ORDERS": {
         "user_message": """You are an e-commerce assistant specialized in order tracking.
 
-CONTEXT: The user is asking about tracking information: "{query}"
+                CONTEXT: The user is asking about tracking information: "{query}"
 
-TASK: Provide accurate, helpful tracking information based on the retrieved data.
+                TASK: Provide accurate, helpful tracking information based on the retrieved data.
 
-REASONING STEPS:
-1. Identify the specific order(s) the user is inquiring about
-2. Determine if this is a follow-up to previous conversation
-3. Assess the current status of each order (delivery, return, refund)
-4. Consider what format would present this information most clearly
-5. Decide what level of detail is appropriate for this query
+                REASONING STEPS:
+                1. Identify the specific order(s) the user is inquiring about
+                2. Determine if this is a follow-up to previous conversation
+                3. Assess the current status of each order (delivery, return, refund)
+                4. Consider what format would present this information most clearly
+                5. Decide what level of detail is appropriate for this query
 
-RETRIEVED DATA:
-{sources}
+                RETRIEVED DATA:
+                {sources}
 
-FORMAT YOUR RESPONSE:
-- Address the user's specific tracking question directly
-- Clearly state the current delivery status of each relevant order
-- Include return status if applicable
-- Include refund status if applicable
-- Outline any required actions or next steps
-- If multiple orders match, present them in the user's preferred format or the most appropriate format
-- For unclear queries, ask clarifying questions
+                FORMAT YOUR RESPONSE:
+                - Address the user's specific tracking question directly
+                - Clearly state the current delivery status of each relevant order
+                - Include return status if applicable
+                - Include refund status if applicable
+                - Outline any required actions or next steps
+                - If multiple orders match, present them in the user's preferred format or the most appropriate format
+                - For unclear queries, ask clarifying questions
 
-Remember to be precise about dates and statuses, as users rely on this information for planning.""",
-        "fields_to_select": ["user_name", "product_id", "product_description", "brand", "price", "order_id", "order_date", "order_total", "status", "delivery_date", "shipping_address", "payment_method", "payment_status"],
-        "document_count": 5,
-        "index_name": NIA_SEARCH_INDEX_NAME,
-        "semantic_configuration_name": NIA_SEMANTIC_CONFIGURATION_NAME,
-        "role_information": "logistics",
-        "model_configuration": {
-            "max_tokens": 500,
-            "temperature": 0.2,
-            "top_p": 0.95,
-            "frequency_penalty": 0.2,
-            "presence_penalty": 0.2
-        }
+                Remember to be precise about dates and statuses, as users rely on this information for planning.""",
+            "fields_to_select": ["user_name", "product_id", "product_description", "brand", "price", "order_id", "order_date", "order_total", "status", "delivery_date", "shipping_address", "payment_method", "payment_status"],
+            "document_count": 5,
+            "index_name": NIA_SEARCH_INDEX_NAME,
+            "semantic_configuration_name": NIA_SEMANTIC_CONFIGURATION_NAME,
+            "role_information": "logistics",
+            "model_configuration": {
+                "max_tokens": 500,
+                "temperature": 0.2,
+                "top_p": 0.95,
+                "frequency_penalty": 0.2,
+                "presence_penalty": 0.2
+            }
+    },
+
+    "TRACK_ORDERS_TKE": {
+        "user_message": """You are an e-commerce assistant specialized in order tracking.
+
+                CONTEXT: The user is asking about tracking information: "{query}"
+
+                TASK: Provide accurate, helpful tracking information based on the retrieved data.
+
+                REASONING STEPS:
+                1. Identify the specific order(s) the user is inquiring about
+                2. Determine if this is a follow-up to previous conversation
+                3. Assess the current status of each order (delivery, return, refund)
+                4. Consider what format would present this information most clearly
+                5. Decide what level of detail is appropriate for this query
+
+                RETRIEVED DATA:
+                {sources}
+
+                FORMAT YOUR RESPONSE:
+                - Address the user's specific tracking question directly
+                - Clearly state the current delivery status of each relevant order
+                - Include return status if applicable
+                - Include refund status if applicable
+                - Outline any required actions or next steps
+                - If multiple orders match, present them in the user's preferred format or the most appropriate format
+                - For unclear queries, ask clarifying questions
+
+                Remember to be precise about dates and statuses, as users rely on this information for planning.""",
+            "fields_to_select": ["opportunity", "Product", "orderQuantity", "status", "createDate", "organization", "solutionDescription", "totalCustomerSalePrice", "yourReferenceId", "dealerNumber", "solutionOrgLabel", "organizationType", "noOfDaysToDrawingsExpire", "solutionId", "orderClass"],
+            "document_count": 5,
+            "index_name": NIA_TKE_RAG_INDEX,
+            "semantic_configuration_name": NIA_TKE_RAG_SEMANTIC_CONFIGURATION,
+            "role_information": "logistics",
+            "model_configuration": {
+                "max_tokens": 1000,
+                "temperature": 0.3,
+                "top_p": 0.95,
+                "frequency_penalty": 0.2,
+                "presence_penalty": 0.2
+            }
     },
 
     "ANALYZE_SPENDING_PATTERNS": {
@@ -1253,7 +1296,7 @@ Remember to highlight aspects of the watch that would be most relevant to the us
         }
     },
 
-    "DOC_SEARCH": {
+    "DOC SEARCH": {
         "user_message": """You are an AI document analysis assistant specialized in retrieving precise information from technical documentation.
 
 CONTEXT: The user is asking: "{query}"
