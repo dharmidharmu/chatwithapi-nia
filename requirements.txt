@@ -8,7 +8,7 @@ azure-search-documents==11.6.0b1
 azure-storage-blob==12.25.0
 fastapi==0.115.2
 fastapi-cli==0.0.7
-httpx==-0.28.1
+httpx==0.28.1
 ipykernel
 motor==3.7.0 # Motor, an asynchronous MongoDB driver, is the recommended library for handling MongoDB connections in FastAPI.
 msal==1.31.0 # Microsoft Authentication Library for Python.
