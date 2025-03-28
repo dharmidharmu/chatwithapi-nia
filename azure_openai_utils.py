@@ -52,7 +52,7 @@ nia_semantic_configuration_name = os.getenv("NIA_SEMANTIC_CONFIGURATION_NAME")
 DEFAULT_MODEL_NAME = os.getenv("DEFAULT_MODEL_NAME")
 ECOMMERCE_MODEL_NAME = os.getenv("ECOMMERCE_MODEL_NAME")
 AZURE_ENDPOINT_URL = os.getenv("AZURE_ENDPOINT_URL")
-AZURE_OPENAI_KEY = os.getenv("OPEN_API_KEY")
+AZURE_OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 AZURE_OPENAI_MODEL_API_VERSION = os.getenv("API_VERSION")
 
 # Azure GPT 4o parameters
@@ -68,7 +68,7 @@ openai_account_name = os.getenv("OPENAI_ACCOUNT_NAME")
 #previous_conversations_count = os.getenv("PREVIOUS_CONVERSATIONS_TO_CONSIDER")
 
 # Azure Blob Storage - Used for storing image uploads
-AZURE_BLOB_STORAGE_CONNECTION_URL=os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+AZURE_BLOB_STORAGE_CONNECTION_STRING=os.getenv("BLOB_STORAGE_CONNECTION_STRING")
 AZURE_BLOB_STORAGE_CONTAINER=os.getenv("BLOB_STORAGE_CONTAINER_NAME")
 AZURE_BLOB_STORAGE_ACCOUNT_NAME=os.getenv("BLOB_STORAGE_ACCOUNT_NAME")
 AZURE_BLOB_STORAGE_ACCESS_KEY=os.getenv("BLOB_STORAGE_ACCESS_KEY")
@@ -757,12 +757,14 @@ async def get_data_from_azure_search(search_query: str, use_case: str):
         logger.info(f"Search Client: {azure_ai_search_client} \nSearch Query: {search_query}")
 
         # Get the documents
-        if use_case == "TRACK_ORDERS_TKE" or use_case == "REVIEW_BYTES" or use_case == "COMPLAINTS_AND_FEEDBACK" or use_case == "SEASONAL_SALES" or use_case == "DOC_SEARCH":
+        if use_case == "TRACK_ORDERS_TKE" or use_case == "MANAGE_TICKETS" or use_case == "REVIEW_BYTES" or use_case == "COMPLAINTS_AND_FEEDBACK" or use_case == "SEASONAL_SALES" or use_case == "DOC_SEARCH":
             selected_fields = USE_CASE_CONFIG[use_case]["fields_to_select"]
         else:
             selected_fields = ALL_FIELDS 
 
         logger.info(f"Selected Fields: {selected_fields}")
+        semantic_config_name = USE_CASE_CONFIG[use_case]["semantic_configuration_name"]
+        logger.info(f"Semantic Config Name {semantic_config_name}")
         #selected_fields = ["user_name", "order_id", "product_description", "brand", "order_date", "status", "delivery_date"]
         search_results = azure_ai_search_client.search(search_text=search_query, 
                                                  #top = 5,

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 # Initialize the Azure OpenAI client
 # client = AzureOpenAI(
 #     azure_endpoint = os.getenv("AZURE_ENDPOINT_URL"), 
-#     api_key=os.getenv("OPEN_API_KEY"),  
+#     api_key=os.getenv("OPENAI_API_KEY"),  
 #     api_version=os.getenv("API_VERSION")
 
 #     # azure_endpoint = os.getenv("GPT4O_ENDPOINT_URL"), 

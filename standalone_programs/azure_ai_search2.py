@@ -4,7 +4,7 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv # For environment variables (recommended)
 
 endpoint = os.getenv("AZURE_ENDPOINT_URL")
-api_key = os.getenv("OPEN_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
 # set the deployment name for the model we want to use
 deployment = os.getenv("ECOMMERCE_MODEL_NAME")
 

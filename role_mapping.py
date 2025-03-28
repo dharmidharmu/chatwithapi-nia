@@ -15,6 +15,7 @@ NIA_SEASONAL_SALES_INDEX_NAME=os.getenv("NIA_SEASONAL_SALES_INDEX_NAME")
 NIA_REVIEW_BYTES_INDEX_NAME=os.getenv("NIA_REVIEW_BYTES_INDEX_NAME")
 NIA_PDF_SEARCH_INDEX_NAME = os.getenv('NIA_PDF_SEARCH_INDEX_NAME') #Virtimo Changes
 NIA_TKE_RAG_INDEX=os.getenv("NIA_TKE_RAG_INDEX")
+NIA_TKE_INCIDENTS_INDEX=os.getenv("NIA_TKE_INCIDENTS_INDEX")
 
 NIA_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_SEMANTIC_CONFIGURATION_NAME")
 NIA_COMPLAINTS_AND_FEEDBACK_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_COMPLAINTS_AND_FEEDBACK_SEMANTIC_CONFIGURATION_NAME")
@@ -24,6 +25,7 @@ NIA_SEASONAL_SALES_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_SEASONAL_SALES_SEM
 NIA_REVIEW_BYTES_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_REVIEW_BYTES_SEMANTIC_CONFIGURATION_NAME")
 NIA_VIRTIMO_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME = os.getenv('NIA_VIRTIMO_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME')
 NIA_TKE_RAG_SEMANTIC_CONFIGURATION=os.getenv("NIA_TKE_RAG_SEMANTIC_CONFIGURATION")
+NIA_TKE_INCIDENTS_SEMANTIC_CONFIGURATION=os.getenv("NIA_TKE_INCIDENTS_SEMANTIC_CONFIGURATION")
 
 # Configure LLM Parameters
 DEFAULT_MODEL_CONFIGURATION = {
@@ -125,7 +127,7 @@ FUNCTION_CALLING_USER_MESSAGE = """
      Conversation History : {conversation_history}
 """
 
-USE_CASES_LIST = ['SEARCHING_ORDERS', 'SUMMARIZE_PRODUCT_REVIEWS', 'TRACK_ORDERS', 'TRACK_ORDERS_TKE', 'ANALYZE_SPENDING_PATTERNS', 'CUSTOMER_COMPLAINTS', 'PRODUCT_COMPARISON', 'CUSTOMIZED_RECOMMENDATIONS', 'GENERATE_REPORTS', 'PRODUCT_INFORMATION', 'COMPLAINTS_AND_FEEDBACK', 'HANDLE_FAQS', 'SEASONAL_SALES', 'GENERATE_MAIL_PROMOTION', 'GENERATE_MAIL_ORDERS', 'REVIEW_BYTES', 'DOC SEARCH']
+USE_CASES_LIST = ['SEARCHING_ORDERS', 'SUMMARIZE_PRODUCT_REVIEWS', 'TRACK_ORDERS', 'TRACK_ORDERS_TKE', 'MANAGE_TICKETS', 'ANALYZE_SPENDING_PATTERNS', 'CUSTOMER_COMPLAINTS', 'PRODUCT_COMPARISON', 'CUSTOMIZED_RECOMMENDATIONS', 'GENERATE_REPORTS', 'PRODUCT_INFORMATION', 'COMPLAINTS_AND_FEEDBACK', 'HANDLE_FAQS', 'SEASONAL_SALES', 'GENERATE_MAIL_PROMOTION', 'GENERATE_MAIL_ORDERS', 'REVIEW_BYTES', 'DOC SEARCH']
 
 #Prompt 8 - CONTEXTUAL PROMPT USED FOR CONVERSATION SUMMARY
 CONTEXTUAL_PROMPT = """
@@ -1334,6 +1336,51 @@ Remember to base your response solely on the provided documentation without addi
             "temperature": 0.2,
             "top_p": 0.95,
             "frequency_penalty": 0.7,
+            "presence_penalty": 0.3
+        }
+    },
+
+    "MANAGE_TICKETS": {
+        "user_message": """You are an intelligent AI assistant specialized in incident management and ticket analysis.
+
+CONTEXT: The user is asking for insights or support related to an incident ticket: "{query}"
+
+TASK: Analyze the provided ticket information and offer meaningful insights or actionable support.
+
+REASONING STEPS:
+1. Identify the specific ticket or incident being referenced.
+2. Determine if this is a follow-up to a previous conversation or a standalone query.
+3. Review the ticket details, including issue description, resolution steps, and customer sentiment.
+4. Assess the current status of the ticket (open, resolved, in-progress, escalated).
+5. Identify patterns, key points, or recurring issues from the ticket data.
+6. Consider what format would best present this information to the user.
+7. Provide actionable recommendations or next steps if applicable.
+8. The provide chat_log property has role and message. The role can be either 'user' or 'agent'. The message is the text of the chat. Use this information while generating the response.
+
+RETRIEVED DATA:
+{sources}
+
+FORMAT YOUR RESPONSE:
+- Begin by acknowledging the specific ticket or incident being discussed.
+- Summarize the key details of the ticket, including issue description, resolution steps, and current status.
+- Highlight any patterns, trends, or recurring issues identified in the ticket data.
+- Provide actionable recommendations or next steps if applicable.
+- Maintain a professional and empathetic tone throughout.
+- If the query is unclear or additional information is needed, ask clarifying questions.
+- Before sending the response to user, re-evaluate the response against the user query and do a self evaluation.
+- Only provide the data that the user requests. Dynamically adjust the response based on the user's query.
+
+Remember to focus on providing clear, actionable insights that help the user effectively manage the incident.""",
+        "fields_to_select": ["incident_id", "title", "problem", "chat_log"],
+        "document_count": 10,
+        "index_name": NIA_TKE_INCIDENTS_INDEX,
+        "semantic_configuration_name": NIA_TKE_INCIDENTS_SEMANTIC_CONFIGURATION,
+        "role_information": "incident_management",
+        "model_configuration": {
+            "max_tokens": 700,
+            "temperature": 0.4,
+            "top_p": 0.95,
+            "frequency_penalty": 0.3,
             "presence_penalty": 0.3
         }
     }
