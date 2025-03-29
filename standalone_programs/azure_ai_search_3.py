@@ -3,15 +3,17 @@ import re
 import time
 import base64
 import traceback
+from typing import List
 from azure.core.credentials import AzureKeyCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 from azure.search.documents.indexes import SearchIndexClient, SearchIndexerClient
-from azure.search.documents.indexes.models import SearchIndex, SearchField, SearchFieldDataType, SearchIndexerSkillset
-from azure.search.documents.indexes.models import  DocumentExtractionSkill, SplitSkill, AzureOpenAIEmbeddingSkill, SearchIndexer
-from azure.search.documents.indexes.models import SimpleField, SemanticConfiguration, SemanticSearch
+from azure.search.documents.indexes.models import SearchIndex, SearchIndexer, SearchField, SearchFieldDataType, SearchIndexerSkillset
+from azure.search.documents.indexes.models import  DocumentExtractionSkill, SplitSkill, AzureOpenAIEmbeddingSkill, OcrSkill, MergeSkill
+from azure.search.documents.indexes.models import SimpleField, SemanticConfiguration, SemanticSearch, CorsOptions, ScoringProfile
 from azure.search.documents.indexes.models import SemanticPrioritizedFields, SemanticField, OutputFieldMappingEntry, FieldMapping, FieldMappingFunction
 from azure.search.documents.indexes.models import InputFieldMappingEntry, SearchIndexerDataSourceConnection
-from azure.search.documents.indexes.models import VectorSearch, VectorSearchProfile, VectorSearchAlgorithmConfiguration, HnswAlgorithmConfiguration, VectorSearchAlgorithmKind
+from azure.search.documents.indexes.models import VectorSearch, VectorSearchProfile, HnswAlgorithmConfiguration, VectorSearchAlgorithmKind
+from azure.search.documents.indexes.models import SearchIndexerIndexProjections, SearchIndexerIndexProjectionSelector, SearchIndexerIndexProjectionsParameters, IndexProjectionMode, CognitiveServicesAccountKey
 
 from azure.search.documents import SearchClient
 import glob
@@ -29,15 +31,16 @@ AZURE_SEARCH_KEY = os.getenv("SEARCH_KEY")
 AZURE_AI_EMBEDDING_DEPLOYMENT = os.getenv("EMBEDDING_MODEL_NAME")  # Change based on your deployment
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_ENDPOINT_URL")
 AZURE_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+AZURE_AI_SERVICES_KEY=os.getenv("AZURE_AI_SERVICES_API_KEY")
 
 # Blob Storage Container
 BLOB_CONTAINER_NAME = "rag-documents"
 
 # Azure Search Parameters
 INDEX_NAME = "rag-index"
-SKILLSET_NAME = "pdf-processing-skillset"
-DATASOURCE_NAME = "pdfs-datasource"
-INDEXER_NAME = "pdf-indexer"
+SKILLSET_NAME = "rag-processing-skillset"
+DATASOURCE_NAME = "rag-datasource"
+INDEXER_NAME = "rag-indexer"
 
 blob_service_client: BlobServiceClient = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
 container_client: ContainerClient = blob_service_client.get_container_client(BLOB_CONTAINER_NAME)
@@ -142,9 +145,12 @@ def create_search_index():
             )
         ]
     )
+
+    cors_options = CorsOptions(allowed_origins=["*"], max_age_in_seconds=60)
+    scoring_profiles: List[ScoringProfile] = []
     
     fields = [
-        SimpleField(name="id", type=SearchFieldDataType.String, key=True),
+        SimpleField(name="id", type=SearchFieldDataType.String, key=True, filterable=True),
         SearchField(name="content", type=SearchFieldDataType.String, searchable=True),
         SearchField(name="metadata", type=SearchFieldDataType.String, searchable=True),
         SearchField(name="embedding", 
@@ -178,6 +184,8 @@ def create_search_index():
     index:SearchIndex = SearchIndex(
         name=INDEX_NAME, 
         fields=fields, 
+        scoring_profiles=scoring_profiles,
+        cors_options=cors_options,
         semantic_search=semantic_search,
         vector_search=vector_search)
 
@@ -187,47 +195,136 @@ def create_search_index():
 
 def create_skillset():
     """ Creates a skillset for text extraction, chunking, and embedding """
-    
+    # DocumentExtractionSkill is used to extract text from various document types (e.g., PDFs, Word documents). 
+    # It ensures that the content is accurately extracted from different formats.
+    # Using DocumentExtractionSkill can enhance the quality of content extraction, especially when dealing with diverse document formats. 
+    # It ensures that the text is correctly extracted before any further processing.
     document_extraction_skill: DocumentExtractionSkill = DocumentExtractionSkill(
         name="Document Extraction",
-        description="Extracts text from PDFs",
+        description="Extract text from different types of documents",
         context="/document",
         parsing_mode="default",
         data_to_extract="contentAndMetadata",
-        inputs=[InputFieldMappingEntry(name="file_data", source= "/blob/data")], #"/document/file_data"
-        outputs=[OutputFieldMappingEntry(name="text", target_name="extracted_text")]
+        inputs=[InputFieldMappingEntry(name="file_data", source="/document/file_data")],
+        outputs=[OutputFieldMappingEntry(name="content", target_name="/document/content")]
     )
 
-    text_split_skill: SplitSkill = SplitSkill(
-        name="Text Split",
-        description="Splits text into chunks",
+    ocr_skill: OcrSkill = OcrSkill(
+        description="OCR skill to scan PDFs and other images with text",
+        context="/document/normalized_images/*",
+        line_ending="Space",
+        default_language_code="en",
+        should_detect_orientation=True,
+        inputs=[
+            InputFieldMappingEntry(name="image", source="/document/normalized_images/*")
+        ],
+        outputs=[
+            OutputFieldMappingEntry(name="text", target_name="text"),
+            OutputFieldMappingEntry(name="layoutText", target_name="layoutText")
+        ]
+    )
+
+    merge_skill: MergeSkill = MergeSkill(
+        description="Merge skill for combining OCR'd and regular text",
+        context="/document",
+        inputs=[
+            InputFieldMappingEntry(name="text", source="/document/content"),
+            InputFieldMappingEntry(name="itemsToInsert", source="/document/normalized_images/*/text"),
+            InputFieldMappingEntry(name="offsets", source="/document/normalized_images/*/contentOffset")
+        ],
+        outputs=[
+            OutputFieldMappingEntry(name="mergedText", target_name="merged_content")
+        ]
+    )
+
+    use_ocr: bool = False
+
+    split_skill_text_source = "/document/content" if not use_ocr else "/document/merged_content"
+    split_skill = SplitSkill(
+        description="Split skill to chunk documents",
         context="/document",
         text_split_mode="pages", #"sentences",
-        maximum_page_length=2000, 
+        maximum_page_length=2000,
         page_overlap_length=500,
-        inputs=[InputFieldMappingEntry(name="text", source="/document/extracted_text")],
-        outputs=[OutputFieldMappingEntry(name="textItems", target_name="chunks")]
+        inputs=[
+            InputFieldMappingEntry(name="text", source=split_skill_text_source),
+        ],
+        outputs=[
+            OutputFieldMappingEntry(name="textItems", target_name="pages")
+        ],
     )
 
-    embedding_skill: AzureOpenAIEmbeddingSkill = AzureOpenAIEmbeddingSkill(
-        name="Embedding Generation",
-        description="Generates embeddings",
-        context="/document/chunks/*",
-        inputs=[InputFieldMappingEntry(name="text", source="/document/chunks/*")],
-        outputs=[OutputFieldMappingEntry(name="embedding", target_name="embedding")],
-        deployment_id=AZURE_AI_EMBEDDING_DEPLOYMENT,
+    # Split Skill is used to break down the extracted text into smaller chunks, which is useful for processing and embedding.
+    # If your documents are already in a text-friendly format (e.g., plain text), you might not need DocumentExtractionSkill. 
+    # However, for PDFs, scanned images, or complex formats, it is beneficial.
+    # text_split_skill: SplitSkill = SplitSkill(
+    #     name="Text Split",
+    #     description="Splits text into chunks",
+    #     context="/document",
+    #     text_split_mode="pages", #"sentences",
+    #     maximum_page_length=2000, 
+    #     page_overlap_length=500,
+    #     inputs=[InputFieldMappingEntry(name="text", source="/document/extracted_text")],
+    #     outputs=[OutputFieldMappingEntry(name="textItems", target_name="chunks")]
+    # )
+
+    embedding_skill = AzureOpenAIEmbeddingSkill(
+        description="Skill to generate embeddings via Azure OpenAI",
+        context="/document/pages/*",
         resource_uri=AZURE_OPENAI_ENDPOINT,
-        api_key=AZURE_OPENAI_API_KEY
+        deployment_id=AZURE_AI_EMBEDDING_DEPLOYMENT,
+        #model_name=azure_openai_model_name,
+        #dimensions=azure_openai_model_dimensions,
+        api_key=AZURE_OPENAI_API_KEY,
+        inputs=[
+            InputFieldMappingEntry(name="text", source="/document/pages/*"),
+        ],
+        outputs=[
+            OutputFieldMappingEntry(name="embedding", target_name="vector")
+        ],
     )
+
+
+    # embedding_skill: AzureOpenAIEmbeddingSkill = AzureOpenAIEmbeddingSkill(
+    #     name="Embedding Generation",
+    #     description="Generates embeddings",
+    #     context="/document/chunks/*",
+    #     inputs=[InputFieldMappingEntry(name="text", source="/document/chunks/*")],
+    #     outputs=[OutputFieldMappingEntry(name="embedding", target_name="embedding")],
+    #     deployment_id=AZURE_AI_EMBEDDING_DEPLOYMENT,
+    #     resource_uri=AZURE_OPENAI_ENDPOINT,
+    #     api_key=AZURE_OPENAI_API_KEY
+    # )
+
+    # index_projections = SearchIndexerIndexProjections(
+    #     selectors=[
+    #         SearchIndexerIndexProjectionSelector(
+    #             target_index_name=INDEX_NAME,
+    #             parent_key_field_name="title",
+    #             source_context="/document/pages/*",
+    #             mappings=[
+    #                 InputFieldMappingEntry(name="chunk", source="/document/pages/*"),
+    #                 InputFieldMappingEntry(name="vector", source="/document/pages/*/vector"),
+    #                 InputFieldMappingEntry(name="title", source="/document/metadata_storage_name"),
+    #             ],
+    #         ),
+    #     ],
+    #     parameters=SearchIndexerIndexProjectionsParameters(
+    #         projection_mode=IndexProjectionMode.SKIP_INDEXING_PARENT_DOCUMENTS
+    #     ),
+    # )
+
+    cognitive_services_account = CognitiveServicesAccountKey(key=AZURE_AI_SERVICES_KEY) if use_ocr else None
+    skills = [document_extraction_skill, split_skill, embedding_skill]
+    if use_ocr:
+        skills.extend([ocr_skill, merge_skill])
 
     skillset: SearchIndexerSkillset = SearchIndexerSkillset(
-        name=SKILLSET_NAME, description="PDF processing skillset",
-        skills=[
-                document_extraction_skill,
-                text_split_skill, 
-                embedding_skill
-              ]
-        #skills=[document_extraction_skill, text_split_skill]
+        name=SKILLSET_NAME, 
+        description="PDF processing skillset",
+        skills=skills,
+        #index_projections=index_projections,
+        cognitive_services_account=cognitive_services_account
     )
 
     indexer_client.create_or_update_skillset(skillset)
@@ -353,6 +450,9 @@ if __name__ == "__main__":
         print(f"Exception occurered {e}")
         traceback.print_exc()
 
+
+    # Tutorial: Design an index for RAG in Azure AI Search : https://learn.microsoft.com/en-us/azure/search/tutorial-rag-build-solution-index-schema
+
     # Python examples for Azure AI Search - https://learn.microsoft.com/en-us/azure/search/samples-python
     # https://learn.microsoft.com/en-us/azure/search/search-get-started-semantic?tabs=python
     # https://learn.microsoft.com/en-us/azure/search/cognitive-search-skill-document-extraction
@@ -367,4 +467,9 @@ if __name__ == "__main__":
     # https://learn.microsoft.com/en-us/azure/search/vector-search-integrated-vectorization
     # https://learn.microsoft.com/en-us/azure/search/vector-search-how-to-configure-vectorizer
 
+    # https://dev.to/willvelida/improving-azure-ai-search-results-with-semantic-search-1mpk
+
     
+# Limitations
+#Semantic search is applied to results returned from the BM25 ranking function. It can re-rank results provided by the BM25 ranking function, it won't provide any additional documents that weren't returned by the BM25 ranking function.
+#Also, remember that the BM25 ranking only works for the first 50 results. If more than 50 results are returned, only the top 50 results are considered.
