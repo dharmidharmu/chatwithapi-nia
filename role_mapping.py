@@ -127,7 +127,7 @@ FUNCTION_CALLING_USER_MESSAGE = """
      Conversation History : {conversation_history}
 """
 
-USE_CASES_LIST = ['SEARCHING_ORDERS', 'SUMMARIZE_PRODUCT_REVIEWS', 'TRACK_ORDERS', 'TRACK_ORDERS_TKE', 'MANAGE_TICKETS', 'ANALYZE_SPENDING_PATTERNS', 'CUSTOMER_COMPLAINTS', 'PRODUCT_COMPARISON', 'CUSTOMIZED_RECOMMENDATIONS', 'GENERATE_REPORTS', 'PRODUCT_INFORMATION', 'COMPLAINTS_AND_FEEDBACK', 'HANDLE_FAQS', 'SEASONAL_SALES', 'GENERATE_MAIL_PROMOTION', 'GENERATE_MAIL_ORDERS', 'REVIEW_BYTES', 'DOC SEARCH']
+USE_CASES_LIST = ['SEARCHING_ORDERS', 'SUMMARIZE_PRODUCT_REVIEWS', 'TRACK_ORDERS', 'TRACK_ORDERS_TKE', 'MANAGE_TICKETS', 'ANALYZE_SPENDING_PATTERNS', 'CUSTOMER_COMPLAINTS', 'PRODUCT_COMPARISON', 'CUSTOMIZED_RECOMMENDATIONS', 'GENERATE_REPORTS', 'PRODUCT_INFORMATION', 'COMPLAINTS_AND_FEEDBACK', 'HANDLE_FAQS', 'SEASONAL_SALES', 'GENERATE_MAIL_PROMOTION', 'GENERATE_MAIL_ORDERS', 'REVIEW_BYTES', 'DOC_SEARCH']
 
 #Prompt 8 - CONTEXTUAL PROMPT USED FOR CONVERSATION SUMMARY
 CONTEXTUAL_PROMPT = """
@@ -564,7 +564,7 @@ CONTEXTUAL_PROMPT = """
 #             "presence_penalty": 1.0
 #         }
 #     },
-#     "DOC SEARCH": { 
+#     "DOC_SEARCH": { 
 #         "user_message": """
 #         Please provide a response based solely on the provided sources. 
 #          - Structure responses in a clear, professional format
@@ -1298,7 +1298,7 @@ Remember to highlight aspects of the watch that would be most relevant to the us
         }
     },
 
-    "DOC SEARCH": {
+    "DOC_SEARCH": {
         "user_message": """You are an AI document analysis assistant specialized in retrieving precise information from technical documentation.
 
 CONTEXT: The user is asking: "{query}"
