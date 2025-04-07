@@ -39,3 +39,5 @@ React Project
 4. Call llama from NIA
 5. Get the function calling working to avoid unwanted Azure AI calls
 6. Find a way for indexing in llama
+
+SUMMA ORU COMMIT
