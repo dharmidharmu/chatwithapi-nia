@@ -6,7 +6,9 @@ import json
 import re
 import tiktoken
 
-from mongo_service import update_usecases, update_orders
+from mongo_service import update_usecases, update_orders, create_usecase_for_document_search
+from azure_ai_search_utils import store_to_azure_ai_search
+from constants import ALLOWED_DOCUMENT_EXTENSIONS, ALLOWED_IMAGE_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +42,26 @@ def create_app_directories():
 
 async def handle_upload_files(gpt_id: str, gpt: GPTData, files: list[UploadFile]):
     # Additional validation (you can add more checks here, like file type validation)
+    # ALLOWED_DOCUMENT_EXTENSIONS = ('.json', '.jsonl', '.pdf', '.csv', '.txt')
+    # ALLOWED_IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg')
     if gpt.use_rag:
         total_size = sum(file.size for file in files)
-        if total_size > 10 * 1024 * 1024:  # 10 MB limit
+        if total_size > 100 * 1024 * 1024:  # 100 MB limit
             raise HTTPException(status_code=400, detail="Total file size exceeds 10MB limit.")
         
     logger.info(f"Use Rag : {gpt.use_rag}")
 
     file_upload_status = ""
+
+    if gpt.use_rag:
+        # Check if the rag folder (PDF) exists and clear the files before adding new ones
+        rag_folder_path = os.path.join(RAG_DOCUMENTS_FOLDER, "RAG_" + gpt_id)
+
+        if os.path.exists(rag_folder_path):
+            for file in os.listdir(rag_folder_path):
+                file_to_remove = os.path.join(rag_folder_path, file)
+                if os.path.isfile(file_to_remove):
+                    os.remove(file_to_remove)
 
     for uploadedFile in files:
         file_extension = os.path.splitext(uploadedFile.filename)[1].lower()
@@ -56,11 +70,25 @@ async def handle_upload_files(gpt_id: str, gpt: GPTData, files: list[UploadFile]
         print(f"file_extension : {file_extension}")
         logger.info(f"file_extension : {file_extension}")
 
-        if gpt.use_rag and file_extension in ('.png', '.jpg', '.jpeg'):
+        if gpt.use_rag and file_extension in ALLOWED_IMAGE_EXTENSIONS:
             file_path = os.path.join(APP_IMAGES_FOLDER, uploadedFile.filename) 
-        elif gpt.use_rag and file_extension in ('.json', '.jsonl', '.pdf', '.csv', '.txt'):
-            file_path = os.path.join(RAG_DOCUMENTS_FOLDER, uploadedFile.filename)
+        elif gpt.use_rag and file_extension in ALLOWED_DOCUMENT_EXTENSIONS:
             try:
+                if file_extension == ".pdf":
+                    # Checks if the existing folder has files and clears them before adding the newly uploaded file
+                    # else old documents stagnate and mix with the collection data
+                    folder_path = os.path.join(RAG_DOCUMENTS_FOLDER, "RAG_" + gpt_id)
+                    # if os.path.exists(folder_path):
+                    #     for file in os.listdir(folder_path):
+                    #         file_to_remove = os.path.join(folder_path, file)
+                    #         if os.path.isfile(file_to_remove):
+                    #             os.remove(file_to_remove)
+                    file_path = os.path.join(folder_path, uploadedFile.filename)
+                else:
+                    file_path = os.path.join(RAG_DOCUMENTS_FOLDER, uploadedFile.filename)
+
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
                 with open(file_path, "wb") as buffer:
                     content = uploadedFile.file.read()
                     if content:
@@ -68,25 +96,29 @@ async def handle_upload_files(gpt_id: str, gpt: GPTData, files: list[UploadFile]
                     else:
                         raise HTTPException(status_code=500, detail="Error saving file: Empty file.")
                 
-                if file_name == 'usecases':
+                if file_name.find('usecases') != -1:
                     try:
                         with open(file_path, "r", encoding='utf-8') as json_file:
                             usecases = json.load(json_file)
                             # Assuming gpt_id is available in the gpt object
                             # for usecase in usecases:
                             #     usecase['gpt_id'] = gpt.gpt_id
-                            #logger.info(f"GPT {gpt}")
                             await update_usecases(gpt_id, usecases)
                             file_upload_status += f"File {uploadedFile.filename} processed and database updated successfully."
                     except Exception as e:
                         file_upload_status += f"Error processing file: {str(e)}"
                         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
-                elif 'Order' in file_name:
-                    try:
-                        with open(file_path, "r", encoding='utf-8') as json_file:
-                            orders = [json.loads(line) for line in json_file]
-                            await update_orders(orders)
-                            file_upload_status += f"File {uploadedFile.filename} processed and database updated successfully."
+                # elif 'Order' in file_name or "consolidated-ecomm-data" in file_name:
+                #     try:
+                #         with open(file_path, "r", encoding='utf-8') as json_file:
+                #             orders = [json.loads(line) for line in json_file]
+                #             await update_orders(orders)
+                #             file_upload_status += f"File {uploadedFile.filename} processed and database updated successfully."
+
+                #             #Store the data to chromadb for llama RAG implementation
+                #             #await store_to_chromadb(orders)
+                #             await store_in_weaviate(orders)
+
                     except Exception as e:
                         file_upload_status += f"Error processing file: {str(e)}"
                         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
@@ -97,6 +129,22 @@ async def handle_upload_files(gpt_id: str, gpt: GPTData, files: list[UploadFile]
                 raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
         else:
             raise HTTPException(status_code=400, detail="Invalid file type for RAG usage.")
+        
+    # Create collection in Weaviate for the uploaded PDF
+    if gpt.use_rag and file_extension == ".pdf":
+        if gpt.name in ["gpt-4o"]:
+                # Store the uploaded PDF into Azure AI Search Index 
+            logger.info(f"Storing into Azure AI Search Index - Started")
+            index_name, semantic_configuration_name = await store_to_azure_ai_search(gpt_id, True)
+            logger.info(f"Storing into Azure AI Search Index - Completed")
+        # else:
+        #     # Store the uploaded PDF into vector database
+        #     logger.info(f"Storing into vector database - Started")
+        #     await store_to_weaviate_rag(gpt_id, True)
+        #     logger.info(f"Storing into vector database - Completed")
+
+        # create a use_case Document_Search in DB for the gpt_id
+        await create_usecase_for_document_search(gpt_id, file_name, index_name, semantic_configuration_name) # if multiple documents are uploaded the last file name will be used    
 
     return file_upload_status
 

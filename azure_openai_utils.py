@@ -21,14 +21,15 @@ from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 from azure.search.documents import SearchClient
 
 from dependencies import NiaAzureOpenAIClient
-from gpt_utils import extract_json_content, extract_response, get_previous_context_conversations, get_token_count
+from gpt_utils import extract_json_content, extract_response, get_previous_context_conversations, get_token_count, handle_upload_files
 from standalone_programs.image_analyzer import analyze_image
 from dotenv import load_dotenv # For environment variables (recommended)
 
-from mongo_service import fetch_chat_history, delete_chat_history, update_message
+from mongo_service import fetch_chat_history, delete_chat_history, update_message, get_usecases
 from role_mapping import ALL_FIELDS, FORMAT_RESPONSE_AS_MARKDOWN, FUNCTION_CALLING_USER_MESSAGE, NIA_SEMANTIC_CONFIGURATION_NAME, USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
 from standalone_programs.simple_gpt import run_conversation, ticket_conversations, get_conversation
 from routes.ilama32_routes import chat2
+from constants import ALLOWED_DOCUMENT_EXTENSIONS, ALLOWED_IMAGE_EXTENSIONS
 
 # from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 
@@ -608,6 +609,8 @@ async def processResponse(response):
 async def generate_response(streaming_response: bool, user_message: str, model_configuration: ModelConfiguration, gpt: GPTData, uploadedFile: UploadFile = None):
 
     instruction_data = gpt["instructions"].split("@@@@@")
+    # ALLOWED_IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg')
+    has_image = False
     use_case = instruction_data[0]
     previous_conversations_count = 6
     proceed = False
@@ -646,8 +649,14 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
     })
         
     
-    has_image = (uploadedFile is not None and uploadedFile.filename != "blob" and uploadedFile.filename != "dummy")
-    has_file = has_image and uploadedFile.filename.endswith(".pdf")
+    #has_image = (uploadedFile is not None and uploadedFile.filename != "blob" and uploadedFile.filename != "dummy")
+    file_extension = os.path.splitext(uploadedFile.filename)[1].lower()
+    if use_rag and file_extension in ALLOWED_IMAGE_EXTENSIONS:
+        has_image = True
+    
+    if file_extension in [".pdf"]:
+        use_rag = True
+        await handle_upload_files(gpt["_id"], gpt, [uploadedFile])
     DEFAULT_IMAGE_RESPONSE = ""
 
     logger.info(f"use_rag is {use_rag}and has_image is {has_image}")
@@ -719,7 +728,7 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
 
     return response
 
-async def get_data_from_azure_search(search_query: str, use_case: str):
+async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: str):
     """
     # PREREQUISITES
         pip install azure-identity
@@ -737,6 +746,19 @@ async def get_data_from_azure_search(search_query: str, use_case: str):
     tenant_id = os.getenv("TENANT_ID")
 
     logger.info(f"Client ID: {client_id} \nClient Secret: {client_secret} \nTenant ID: {tenant_id}")
+    use_cases = await get_usecases(gpt_id)
+    # Extract the matching use case from the collection
+    use_case_data = next((uc for uc in use_cases if uc["name"] == use_case), None)
+
+    index_name = None
+    semantic_configuration_name = None
+    if use_case_data:
+        index_name = use_case_data.get("index_name", None)
+        logger.info(f"Index Name found: {index_name}")
+        semantic_configuration_name = use_case_data.get("semantic_configuration_name", None)
+        logger.info(f"Semantic Configuration Name found: {semantic_configuration_name}")
+    else:
+        logger.warning(f"No matching Index and Semantic Configuration found for: {use_case}")
 
     #logger.info(f"use_case: {use_case}")
 
@@ -748,7 +770,8 @@ async def get_data_from_azure_search(search_query: str, use_case: str):
         azure_ai_search_client = SearchClient(
             endpoint=os.getenv("SEARCH_ENDPOINT_URL"),
             #index_name=os.getenv("SEARCH_INDEX_NAME"),
-            index_name=USE_CASE_CONFIG[use_case]["index_name"],
+            # index_name=USE_CASE_CONFIG[use_case]["index_name"],
+            index_name = index_name,
             credential=credential)
         
         if not all([client_id, client_secret, tenant_id, search_endpoint, search_index]):
@@ -763,15 +786,16 @@ async def get_data_from_azure_search(search_query: str, use_case: str):
             selected_fields = ALL_FIELDS 
 
         logger.info(f"Selected Fields: {selected_fields}")
-        semantic_config_name = USE_CASE_CONFIG[use_case]["semantic_configuration_name"]
-        logger.info(f"Semantic Config Name {semantic_config_name}")
+        # semantic_config_name = USE_CASE_CONFIG[use_case]["semantic_configuration_name"]
+        # logger.info(f"Semantic Config Name {semantic_config_name}")
         #selected_fields = ["user_name", "order_id", "product_description", "brand", "order_date", "status", "delivery_date"]
         search_results = azure_ai_search_client.search(search_text=search_query, 
                                                  #top = 5,
-                                                 top=USE_CASE_CONFIG[use_case]["document_count"], 
+                                                 top=USE_CASE_CONFIG.get(use_case, {}).get("document_count", 30), 
                                                  include_total_count=True, 
                                                  query_type="semantic",
-                                                 semantic_configuration_name=USE_CASE_CONFIG[use_case]["semantic_configuration_name"],
+                                                #  semantic_configuration_name=USE_CASE_CONFIG[use_case]["semantic_configuration_name"],
+                                                semantic_configuration_name = semantic_configuration_name,
                                                  select=selected_fields)
         
         logger.info("Documents in Azure Search:")
@@ -864,8 +888,11 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
     function_calling_conversations = []
     data = []
     deployment_name = gpt["name"]
+    gpt_id: str = str(gpt["_id"]) 
 
     logger.info(f"determineFunctionCalling calling Start {deployment_name}")
+    use_case_from_db = await get_usecases(gpt_id)
+    use_case_list = [use_case["name"] for use_case in use_case_from_db]
 
     # Azure Open AI Clients for different tasks
     azure_openai_client =  AsyncAzureOpenAI(
@@ -897,7 +924,7 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
                         },
                         "use_case": {
                             "type": "string", 
-                            "enum": USE_CASES_LIST,
+                            "enum": use_case_list,
                             "description": f"The actual use case of the user query, e.g. {use_case}"
                             },
                     },
@@ -937,7 +964,8 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
                     logger.info(f"Function arguments: {function_args}")  
                     data = await get_data_from_azure_search(
                         search_query=function_args.get("search_query"),
-                        use_case=function_args.get("use_case")
+                        use_case=function_args.get("use_case"),
+                        gpt_id = gpt_id
                     )
 
                     # Append the function response to the original conversation list

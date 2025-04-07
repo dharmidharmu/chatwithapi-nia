@@ -8,4 +8,6 @@ class Usecase(BaseModel):
     name: str
     description: str
     instructions: str
+    index_name: str
+    semantic_configuration_name: str
     created_at: str = datetime.now().isoformat()

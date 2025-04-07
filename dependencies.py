@@ -2,6 +2,7 @@ from openai import AsyncAzureOpenAI, AzureOpenAI
 
 class NiaAzureOpenAIClient:
     _instance = None
+    _client = None  # define at class level
 
     def __new__(cls, azure_endpoint: str, api_key: str, api_version: str, stream: bool):
         if cls._instance is None:
@@ -23,4 +24,6 @@ class NiaAzureOpenAIClient:
         #         api_version=api_version)
 
     def get_azure_client(self):
+        if not hasattr(self, "client"):
+            raise ValueError("Azure client has not been initialized.")
         return self.client

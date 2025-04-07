@@ -29,7 +29,7 @@ from data.GPTData import GPTData
 from data.ModelConfiguration import ModelConfiguration
 from gpt_utils import handle_upload_files, create_folders
 from azure_openai_utils import generate_response, get_azure_openai_deployments, call_maf
-from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message
+from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message, get_collection
 from routes.ilama32_routes import router as ilama32_router
 
 import uvicorn
@@ -453,6 +453,55 @@ async def update_instruction(request: Request, gpt_id: str, gpt_name: str, useca
             response = JSONResponse({"error": "Unauthorized user"}, status_code=401)
     except Exception as e:
         logger.error(f"Error occurred while updating instruction: {e}", exc_info=True)
+        response = JSONResponse({"error": f"Error Code: {e}"}, status_code=500)
+
+    return response
+
+@app.put("/upload_document/{gpt_id}/{gpt_name}")
+async def upload_document_index(request: Request, gpt_id: str, gpt_name: str, files: list[UploadFile] = File(...)):
+    logger.info(f"Updating GPT with ID: {gpt_id} Name: {gpt_name}")
+    gpts_collection = await get_collection("gpts")
+    gpt: GPTData = await gpts_collection.find_one({"_id": ObjectId(gpt_id)})
+    logger.info(f"GPT Details: {gpt}")
+    try:
+        loggedUser = getUserName(request, "modify_gpt")
+        if loggedUser != None and loggedUser != "N/A":
+            if gpt is None:
+                raise ValueError("GPT object is None. Ensure it is properly initialized.")
+            # Parse the JSON string into a dictionary
+            # gpt = json.loads(gpt)
+            gpt["user"] = loggedUser
+            gpt["use_case_id"] = gpt.get("use_case_id", "") 
+            gpt["use_rag"] = True
+        
+            # Now you can access gpt as a dictionary
+            gpt = GPTData(**gpt)  # Validate and create GPTData instance
+            logger.info(f"Received GPT data: {gpt}")
+
+            if files != None and len(files) > 0:
+                for file in files:
+                    logger.info(f"Received files: {file.filename}")
+
+            # result = await update_gpt(gpt_id, gpt_name, gpt)
+            logger.info(f"GPT : {gpt.name}, use_rag: {bool(gpt.use_rag)}")
+
+            file_upload_status = ""
+
+            if gpt.use_rag:
+                file_upload_status = await handle_upload_files(gpt_id, gpt, files)
+                logger.info(f"RAG Files uploaded successfully: {file_upload_status}")
+                response = JSONResponse({"message": "Document Uploaded Successfully!", "gpt_name": gpt_name, "file_upload_status" : file_upload_status}, status_code=200)
+                
+            # if result.modified_count == 1:
+            #     response = JSONResponse({"message": "GPT created successfully!", "gpt_name": gpt_name, "file_upload_status" : file_upload_status}, status_code=200)
+            # elif result.modified_count == 0:
+            #     response = JSONResponse({"message": "No Changes in the updated GPT!", "gpt_name": gpt_name, "file_upload_status" : file_upload_status}, status_code=200)
+            else:
+                response = JSONResponse({"error": "GPT not found"}, status_code=404)
+        else:
+            response = JSONResponse({"error": "Unauthorized user"}, status_code=401)
+    except Exception as e:
+        logger.error(f"Error occurred while updating GPT: {e}", exc_info=True)
         response = JSONResponse({"error": f"Error Code: {e}"}, status_code=500)
 
     return response

@@ -4,7 +4,7 @@ azure-core
 azure-identity # To use the credentials with Azure SDK.
 azure-mgmt-cognitiveservices # To interact with the Cognitive Services Management API.
 #azure-search-documents
-azure-search-documents
+azure-search-documents==11.5.2
 azure-storage-blob
 fastapi
 fastapi-cli

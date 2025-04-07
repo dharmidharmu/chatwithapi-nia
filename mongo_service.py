@@ -3,7 +3,7 @@ import logging
 import datetime as date
 from bson import ObjectId
 from pymongo import MongoClient, ASCENDING, DESCENDING
-from pymongo.results import UpdateResult, InsertOneResult
+from pymongo.results import UpdateResult, InsertOneResult, DeleteResult
 from pymongo.errors import DuplicateKeyError
 import re
 
@@ -82,6 +82,63 @@ async def update_gpt(gpt_id: str, gpt_name: str, updated_gpt: GPTData):
     logger.info(f"Updated GPT: {gpt_name} successfully.")
 
     return result
+
+async def delete_rag_use_case(gpt_id: str = None):
+    is_deleted: bool = False
+    
+    # Get all the use cases starting with "Chat with"
+    usecases_collection = await get_collection("usecases")
+    if gpt_id is not None:
+        existing_use_cases = await usecases_collection.find({"gpt_id": ObjectId(gpt_id), "name": {"$regex": "^DOC_SEARCH"}}).to_list(None)
+    else:
+        existing_use_cases = await usecases_collection.find({"name": {"$regex": "^DOC_SEARCH"}}).to_list(None)
+
+    if existing_use_cases is not None and len(existing_use_cases) > 0:
+        result: DeleteResult = await usecases_collection.delete_many({"_id": {"$in": [use_case["_id"] for use_case in existing_use_cases]}})
+        logger.info(f"Deleted existing use case for RAG use case successfully : {result.deleted_count}")
+        # result: DeleteResult = await delete_usecase(str(existing_use_case["_id"]))
+        # logger.info(f"Step 1: Deleted existing use case for document search successfully. usecase_id : {result.deleted_count}")
+        is_deleted = True
+    else:
+        logger.info("No existing use case found for RAG use case")
+        is_deleted = False
+    
+    return is_deleted
+
+async def create_usecase_for_document_search(gpt_id: str, use_case_name: str, index_name: str, semantic_configuration_name: str):
+    usecases_collection = await get_collection("usecases")
+    gpts_collection = await get_collection("usecases")
+
+    use_case_created = False
+    label = "DOC_SEARCH"
+
+    use_case_document = {
+        "name": label,
+        "description": label,
+        "instructions": "You are an AI document analysis specialist. When answering user queries, base your response solely on the retrieved documentation without adding external information. Begin by directly addressing the user's question, structuring your response in a clear, professional format. Reference specific sections or keywords from the documentation to support your points. For multi-part queries, organize with appropriate headers or numbering for clarity. If the documentation is insufficient to fully answer the query, acknowledge these limitations transparently. For ambiguous requests, ask specific clarifying questions. Present information in the user's preferred format when specified.",
+        "gpt_id": ObjectId(gpt_id),
+        "index_name": index_name,
+        "semantic_configuration_name": semantic_configuration_name
+    }
+
+    # Step 1 : Delete the existing use case
+    # Search for gpt that starts with Chat with (only one should be available per gpt)
+    await delete_rag_use_case(gpt_id=gpt_id)
+
+    # Step 2 : Insert the new use case
+    result: InsertOneResult = await usecases_collection.insert_one(use_case_document)
+    if result.inserted_id is not None:
+        logger.info(f"Step 2: Use case created for document search for GPT: {gpt_id}. Usecase ID : {result.inserted_id}")
+        use_case_created = True
+
+        # Step 3: update the usecase id to the gpt
+        result: UpdateResult = await gpts_collection.update_one(
+            {"_id": ObjectId(gpt_id)},
+            {"$set": {"use_case_id": result.inserted_id}}
+        )
+        logger.info(f"Step 3: Use case connected with GPT: {gpt_id}. Usecase ID : {result.upserted_id}")
+    
+    return use_case_created
 
 async def update_gpt_instruction(gpt_id: str, gpt_name: str, usecase_id: str, loggedUser: str) -> UpdateResult:
     logger.info(f"Updating GPT instruction for GPT: {gpt_id} and {gpt_name} for usecase : {usecase_id}")
