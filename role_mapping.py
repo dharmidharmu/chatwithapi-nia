@@ -16,6 +16,7 @@ NIA_REVIEW_BYTES_INDEX_NAME=os.getenv("NIA_REVIEW_BYTES_INDEX_NAME")
 NIA_PDF_SEARCH_INDEX_NAME = os.getenv('NIA_PDF_SEARCH_INDEX_NAME') #Virtimo Changes
 NIA_TKE_RAG_INDEX=os.getenv("NIA_TKE_RAG_INDEX")
 NIA_TKE_INCIDENTS_INDEX=os.getenv("NIA_TKE_INCIDENTS_INDEX")
+NIA_FINOLEX_SEARCH_INDEX=os.getenv("NIA_FINOLEX_SEARCH_INDEX")
 
 NIA_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_SEMANTIC_CONFIGURATION_NAME")
 NIA_COMPLAINTS_AND_FEEDBACK_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_COMPLAINTS_AND_FEEDBACK_SEMANTIC_CONFIGURATION_NAME")
@@ -26,6 +27,7 @@ NIA_REVIEW_BYTES_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_REVIEW_BYTES_SEMANTI
 NIA_VIRTIMO_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME = os.getenv('NIA_VIRTIMO_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME')
 NIA_TKE_RAG_SEMANTIC_CONFIGURATION=os.getenv("NIA_TKE_RAG_SEMANTIC_CONFIGURATION")
 NIA_TKE_INCIDENTS_SEMANTIC_CONFIGURATION=os.getenv("NIA_TKE_INCIDENTS_SEMANTIC_CONFIGURATION")
+NIA_FINOLEX_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME=os.getenv("NIA_FINOLEX_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME")
 
 # Configure LLM Parameters
 DEFAULT_MODEL_CONFIGURATION = {
@@ -115,9 +117,10 @@ FUNCTION_CALLING_SYSTEM_MESSAGE = """
     You are an extremely powerful AI agent with analytic skills in extracting context and deciding agent to call functions to get context data, based on the previous conversations to support an e-commerce store AI agent.
     - You are provided with user query, conversation history and description of image (optional)
     - Your task to is to decide if to do a function calling to get data from the connected dataset or to generate a response based on the query.
+    - The data from sear will contain data only from the contract d ```get_extra_data``` parameter to true and call the function ```get_data_from_azure_search```. The default value for ```get_extra_data``` is false.
     - If the intent requires information from the connected dataset (which in most cases will require), only then invoke ```get_data_from_azure_search``` function.
     - Don't make any assumptions about what values, arguments to use with functions. Ask for clarification if a user request is ambiguous.
-    - Only use the functions you have been provided with.
+    - Only use the functions and parameters you have been provided with.
 """
 
 FUNCTION_CALLING_USER_MESSAGE = """
@@ -1308,13 +1311,17 @@ TASK: Provide a well-structured response based solely on the retrieved documenta
 REASONING STEPS:
 1. Analyze what specific information the user is seeking
 2. Determine if this is a follow-up to previous conversation
-3. Locate the most relevant sections in the retrieved documentation
-4. Assess if the documentation fully answers the query
-5. Consider what format would present this information most clearly
-6. Determine if clarification is needed for ambiguous queries
+3. Determine if the user is asking for specific insights with query, only then use the data provided in "RETRIEVED ADDITIONAL DATA" section. Else simple ignore the "RETRIEVED ADDITIONAL DATA" section while generating response.
+4. Locate the most relevant sections in the retrieved documentation
+5. Assess if the documentation fully answers the query
+6. Consider what format would present this information most clearly
+7. Determine if clarification is needed for ambiguous queries
 
 RETRIEVED DATA:
 {sources}
+
+RETRIEVED ADDITIONAL DATA:
+{additional_sources}
 
 FORMAT YOUR RESPONSE:
 - Begin by directly addressing the user's question

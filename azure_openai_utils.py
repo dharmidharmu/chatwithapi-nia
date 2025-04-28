@@ -26,7 +26,7 @@ from standalone_programs.image_analyzer import analyze_image
 from dotenv import load_dotenv # For environment variables (recommended)
 
 from mongo_service import fetch_chat_history, delete_chat_history, update_message, get_usecases
-from role_mapping import ALL_FIELDS, FORMAT_RESPONSE_AS_MARKDOWN, FUNCTION_CALLING_USER_MESSAGE, NIA_SEMANTIC_CONFIGURATION_NAME, USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
+from role_mapping import ALL_FIELDS, FORMAT_RESPONSE_AS_MARKDOWN, FUNCTION_CALLING_USER_MESSAGE, NIA_FINOLEX_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME, NIA_FINOLEX_SEARCH_INDEX, NIA_SEMANTIC_CONFIGURATION_NAME, USE_CASE_CONFIG, CONTEXTUAL_PROMPT, SUMMARIZE_MODEL_CONFIGURATION, USE_CASES_LIST, FUNCTION_CALLING_SYSTEM_MESSAGE, get_role_information
 from standalone_programs.simple_gpt import run_conversation, ticket_conversations, get_conversation
 from routes.ilama32_routes import chat2
 from constants import ALLOWED_DOCUMENT_EXTENSIONS, ALLOWED_IMAGE_EXTENSIONS
@@ -502,7 +502,7 @@ async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, 
     
 async def preprocessForRAG(user_message: str, image_response:str, use_case:str, gpt: GPTData, conversations: list, model_configuration: ModelConfiguration):
     
-    context_information, conversations = await determineFunctionCalling(user_message, image_response, use_case, gpt, conversations, model_configuration)
+    context_information, additional_context_information, conversations = await determineFunctionCalling(user_message, image_response, use_case, gpt, conversations, model_configuration)
 
     # Step 4: Append the current user query with additional context into the conversation. 
     # This additional context is only to generate the response from the model and won't be saved in the conversation history for aesthetic reasons.
@@ -512,7 +512,7 @@ async def preprocessForRAG(user_message: str, image_response:str, use_case:str, 
         conversations.append({
                                 "role": "user",
                                 "content" : USER_PROMPT.format(
-                                                query=user_message, sources=context_information) + FORMAT_RESPONSE_AS_MARKDOWN
+                                                query=user_message, sources=context_information, additional_sources=additional_context_information) + FORMAT_RESPONSE_AS_MARKDOWN
                             })
     else:
         conversations.append({"role": "user", "content": user_message})
@@ -728,7 +728,7 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
 
     return response
 
-async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: str):
+async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: str, get_extra_data: bool):
     """
     # PREREQUISITES
         pip install azure-identity
@@ -739,6 +739,8 @@ async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: s
     logger.info("Inside fetch data from Azure Search")
 
     sources_formatted = ""
+    additional_results_formatted = ""
+    get_extra_data = get_extra_data if get_extra_data is None else False
 
     # Your MSAL app credentials (Client ID, Client Secret, Tenant ID)
     client_id = os.getenv("CLIENT_ID")
@@ -795,22 +797,42 @@ async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: s
                                                  include_total_count=True, 
                                                  query_type="semantic",
                                                 #  semantic_configuration_name=USE_CASE_CONFIG[use_case]["semantic_configuration_name"],
-                                                semantic_configuration_name = semantic_configuration_name,
+                                                 semantic_configuration_name = semantic_configuration_name,
                                                  select=selected_fields)
+        additional_search_results = []
+
+        if get_extra_data:
+            # Create a search client
+            additional_azure_ai_search_client = SearchClient(
+                endpoint=os.getenv("SEARCH_ENDPOINT_URL"),
+                index_name = NIA_FINOLEX_SEARCH_INDEX,
+                credential=credential
+            )
+
+            additional_search_results = additional_azure_ai_search_client.search(search_text=search_query, 
+                                                 top=USE_CASE_CONFIG.get(use_case, {}).get("document_count", 30), 
+                                                 include_total_count=True, 
+                                                 query_type="semantic",
+                                                 semantic_configuration_name = NIA_FINOLEX_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME,
+                                                 select=selected_fields)
+
         
         logger.info("Documents in Azure Search:")
 
         # Convert SearchItemPaged to a list of dictionaries
         results_list = [result for result in search_results]
+        additional_results_list = [result for result in additional_search_results]
 
         # Serialize the results
         sources_formatted = json.dumps(results_list, default=lambda x: x.__dict__, indent=2)
+        additional_results_formatted = json.dumps(additional_results_list, default=lambda x: x.__dict__, indent=2)
         logger.info(f"Context Information: {sources_formatted}")
     except Exception as e:
         sources_formatted = ""
+        additional_results_formatted = ""
         logger.error(f"Exception while fetching data from Azure Search {str(e)}", exc_info=True)
     
-    return sources_formatted
+    return sources_formatted, additional_results_formatted
 
 def get_azure_openai_deployments():
     """
@@ -887,6 +909,8 @@ async def summarize_conversations(chat_history, gpt):
 async def determineFunctionCalling(search_query: str, image_response: str, use_case: str, gpt: GPTData, conversations: list, model_configuration: ModelConfiguration):
     function_calling_conversations = []
     data = []
+    additional_data = []
+
     deployment_name = gpt["name"]
     gpt_id: str = str(gpt["_id"]) 
 
@@ -927,10 +951,14 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
                             "enum": use_case_list,
                             "description": f"The actual use case of the user query, e.g. {use_case}"
                             },
+                        "get_extra_data":{
+                            "type": "boolean",
+                            "description": "If true, fetch the extra data from NIA Finolex Search Index. If false, fetch the data from the use case index"
+                        }
                     },
-                    "required": ["search_query", "use_case"],
+                    "required": ["search_query", "use_case", "get_extra_data"],
                 },
-            }  
+            }
         }
     ]
 
@@ -962,9 +990,10 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
                     logger.info("get_data_from_azure_search called")
                     function_args = json.loads(tool_call.function.arguments)
                     logger.info(f"Function arguments: {function_args}")  
-                    data = await get_data_from_azure_search(
+                    data, additional_data = await get_data_from_azure_search(
                         search_query=function_args.get("search_query"),
                         use_case=function_args.get("use_case"),
+                        get_extra_data=function_args.get("get_extra_data"),
                         gpt_id = gpt_id
                     )
 
@@ -991,7 +1020,7 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
         function_calling_conversations.clear() # Clear the messages list because we do not need the system message, user message in this function
         logger.info(f"function_calling_model_response {function_calling_model_response}")
 
-    return data, conversations
+    return data, additional_data, conversations
 
 # def get_azure_openai_deployments():
 #     logger.info("Getting deployments from Azure OpenAI")
