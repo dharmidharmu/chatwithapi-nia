@@ -3,5 +3,5 @@ DEFAULT_FOLLOW_UP_QUESTIONS = ["I would like to know more about this topic", "I 
 DEFAULT_RESPONSE = "N/A"
 DEFAULT_DELIMETER = "```"
 ALLOWED_IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg')
-ALLOWED_DOCUMENT_EXTENSIONS = ('.json', '.jsonl', '.pdf', '.csv', '.txt')
+ALLOWED_DOCUMENT_EXTENSIONS = ('.json', '.jsonl', '.pdf', '.csv', '.txt','xlsx')
 ELEMENTS_TO_STRIP = ["script", "style", "noscript", "meta", "link"]

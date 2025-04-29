@@ -97,7 +97,7 @@ async def getAzureOpenAIClient(azure_endpoint: str, api_key: str, api_version: s
     #     api_version=api_version)
 
     # Create the singleton instance
-    nia_azure_client = NiaAzureOpenAIClient(azure_endpoint, api_key, api_version, stream)
+    nia_azure_client = await NiaAzureOpenAIClient().create()
 
     # Retrieve the client
     client = nia_azure_client.get_azure_client()
@@ -251,18 +251,47 @@ async def get_completion_from_messages_standard(gpt: GPTData, model_configuratio
             main_response = "No Response from Model. Please try again."
         else:            
             main_response, follow_up_questions, total_tokens = await extract_json_content(response)
-    except APIConnectionError as ce:
-        logger.error(f"APIConnectionError occurred while fetching model response: {ce}", exc_info=True)
-        total_tokens = len(token_encoder.encode(str(conversations)))
-        main_response = f"Connection error occurred while reaching to Azure Open AI. Please try again after some time.\n\n Exception Details : " + ce.message
+    
+    except (APIConnectionError, RateLimitError) as retryable_ex:
+        logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
+
+        from dependencies import NiaAzureOpenAIClient
+        logger.info(f"Retrying with next endpoint")
+        client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
+        try:
+            response = await client.chat.completions.create(
+                model=gpt["name"],
+                messages=conversations,
+                max_tokens=model_configuration.max_tokens,
+                temperature=model_configuration.temperature,
+                top_p=model_configuration.top_p,
+                frequency_penalty=model_configuration.frequency_penalty,
+                presence_penalty=model_configuration.presence_penalty,
+                extra_body=extra_body,
+                seed=100,
+                stop=None,
+                stream=False,
+                user=gpt["user"]
+            )
+            model_response = response.choices[0].message.content
+            logger.info(f"Retry Model Response is {response}")
+
+            if model_response is None or model_response == "":
+                main_response = "No Response from Model. Please try again."
+            else:
+                main_response, follow_up_questions, total_tokens = await extract_json_content(response)
+
+        except Exception as final_ex:
+            logger.error(f"Retry also failed: {final_ex}", exc_info=True)
+            total_tokens = len(token_encoder.encode(str(conversations)))
+            main_response = f"All Azure OpenAI endpoints failed. Please try again later.\n\n Exception Details : {str(final_ex)}"
+
+    
     except BadRequestError as be:
         logger.error(f"BadRequestError occurred while fetching model response: {be}", exc_info=True)
         total_tokens = len(token_encoder.encode(str(conversations)))
         main_response = f"Bad Request error occurred while reaching to Azure Open AI. \n\n Exception Details : " + be.message
-    except RateLimitError as re:
-        logger.error(f"RateLimitError occurred while fetching model response: {re}", exc_info=True)
-        total_tokens = len(token_encoder.encode(str(conversations)))
-        main_response = f"Model is handling heavy load.  Please clear the chat or initiate a new chat window or try after some time..\n\n Exception Details : " + re.message
+    
     except Exception as e:
         logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
         main_response = f"Error occurred while fetching model response: \n\n" + str(e)
@@ -298,35 +327,60 @@ async def get_completion_from_messages_stream(gpt: GPTData, model_configuration,
         
         async def stream_processor():
             nonlocal full_response_content
+            nonlocal client
 
-            response = await client.chat.completions.create(
-                model=gpt["name"],
-                messages=conversations,
-                max_tokens=model_configuration.max_tokens,
-                temperature=model_configuration.temperature,
-                top_p=model_configuration.top_p,
-                frequency_penalty=model_configuration.frequency_penalty,
-                presence_penalty=model_configuration.presence_penalty,
-                stop=None,
-                stream=True,
-                extra_body=extra_body,
-                seed=100,
-                user=gpt["user"]
-                #n=2,
-                #reasoning_effort="low", # available for o1,o3 models only
-                #timeout=30,
-            )
+            try:
+                response = await client.chat.completions.create(
+                    model=gpt["name"],
+                    messages=conversations,
+                    max_tokens=model_configuration.max_tokens,
+                    temperature=model_configuration.temperature,
+                    top_p=model_configuration.top_p,
+                    frequency_penalty=model_configuration.frequency_penalty,
+                    presence_penalty=model_configuration.presence_penalty,
+                    stop=None,
+                    stream=True,
+                    extra_body=extra_body,
+                    seed=100,
+                    user=gpt["user"]
+                )
 
-            async for chunk in response:
-                nonlocal full_response_content
+                async for chunk in response:
+                    if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
+                        chunkContent = chunk.choices[0].delta.content
+                        if chunkContent is not None:
+                            full_response_content += chunkContent
+                            yield chunkContent
 
-                if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
-                    #logger.info(f"chunk.choices[0].delta {chunk.choices[0].delta}")
-                    chunkContent = chunk.choices[0].delta.content
-                    if chunkContent is not None:
-                        full_response_content += chunkContent
-                        #chunkContent = await convert_markdown_to_html(chunkContent)
-                        yield chunkContent
+            except (APIConnectionError, RateLimitError) as conn_ex:
+                logger.warning(f"Connection/Rate limit error encountered: {conn_ex}")
+                try:
+                    client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
+                    response = await client.chat.completions.create(
+                        model=gpt["name"],
+                        messages=conversations,
+                        max_tokens=model_configuration.max_tokens,
+                        temperature=model_configuration.temperature,
+                        top_p=model_configuration.top_p,
+                        frequency_penalty=model_configuration.frequency_penalty,
+                        presence_penalty=model_configuration.presence_penalty,
+                        stop=None,
+                        stream=True,
+                        extra_body=extra_body,
+                        seed=100,
+                        user=gpt["user"]
+                    )
+
+                    async for chunk in response:
+                        if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
+                            chunkContent = chunk.choices[0].delta.content
+                            if chunkContent is not None:
+                                full_response_content += chunkContent
+                                yield chunkContent
+                except Exception as retry_ex:
+                    logger.error(f"Retry also failed: {retry_ex}")
+                    full_response_content = f"All endpoints failed due to: {str(retry_ex)}"
+                    yield full_response_content
         
         # Create a wrapper generator that handles post-stream processing
         async def response_wrapper():
@@ -336,20 +390,12 @@ async def get_completion_from_messages_stream(gpt: GPTData, model_configuration,
                 async for chunk in stream_processor():
                     #logger.info(f"chunk data {chunk}")
                     yield chunk
-            except APIConnectionError as ce:
-                logger.error(f"APIConnectionError occurred while fetching model response: {ce}", exc_info=True)
-                #yield str(re)
-                full_response_content = f"Connection error occurred while reaching to Azure Open AI. Please try again after some time." + ce.message
-                yield full_response_content
+            
             except BadRequestError as be:
                 logger.error(f"BadRequestError occurred while fetching model response: {be}", exc_info=True)
                 full_response_content = f"Bad Request error occurred while reaching to Azure Open AI. \n\n Exception Details : " + be.message
                 yield full_response_content
-            except RateLimitError as re:
-                logger.error(f"RateLimitError occurred while fetching model response: {re}", exc_info=True)
-                #yield str(re)
-                full_response_content = f"Model is handling heavy load.  Please clear the chat or initiate a new chat window or try after some time." + re.message
-                yield full_response_content
+            
             except Exception as e:
                 logger.error(f"Exception occurred while fetching model response: {e}", exc_info=True)
                 #yield str(re)
@@ -405,39 +451,79 @@ async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration
 
     # Get Azure Open AI Client and fetch response
     #client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version, False)
-    client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
-    model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
-
     try:
-        response = await client.chat.completions.create(
-            model=GPT_4o_2_MODEL_NAME,
-            messages=conversations,
-            max_tokens=model_configuration.max_tokens,
-            temperature=model_configuration.temperature,
-            top_p=model_configuration.top_p,
-            frequency_penalty=model_configuration.frequency_penalty,
-            presence_penalty=model_configuration.presence_penalty,
-            stop=None,
-            stream=False,
-            seed=100
-        )
-        model_response = response.choices[0].message.content
-        #logger.info(f"Model Response is {response}")
-        #logger.info(f"Tokens used: {response.usage.total_tokens}")
+        client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
+        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
 
-        if model_response is None or model_response == "":
-            model_response = "No Response from Model. Please try again."
-        else:
-            main_response, follow_up_questions, total_tokens = await processResponse(response)
+        try:
+            response = await client.chat.completions.create(
+                model=GPT_4o_2_MODEL_NAME,
+                messages=conversations,
+                max_tokens=model_configuration.max_tokens,
+                temperature=model_configuration.temperature,
+                top_p=model_configuration.top_p,
+                frequency_penalty=model_configuration.frequency_penalty,
+                presence_penalty=model_configuration.presence_penalty,
+                stop=None,
+                stream=False,
+                seed=100
+            )
+            model_response = response.choices[0].message.content
+            #logger.info(f"Model Response is {response}")
+            #logger.info(f"Tokens used: {response.usage.total_tokens}")
 
-        # Log the response to database
-        if save_response_to_db:
-            await saveAssistantResponse(main_response, gpt, conversations)
+            if model_response is None or model_response == "":
+                model_response = "No Response from Model. Please try again."
+            else:
+                main_response, follow_up_questions, total_tokens = await processResponse(response)
 
+            # Log the response to database
+            if save_response_to_db:
+                await saveAssistantResponse(main_response, gpt, conversations)
+
+        except Exception as e:
+            logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
+            main_response = str(e)
+
+    except (APIConnectionError, RateLimitError) as retryable_ex:
+        logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
+
+        from dependencies import NiaAzureOpenAIClient
+        client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
+        try:
+            response = await client.chat.completions.create(
+                model=GPT_4o_2_MODEL_NAME,
+                messages=conversations,
+                max_tokens=model_configuration.max_tokens,
+                temperature=model_configuration.temperature,
+                top_p=model_configuration.top_p,
+                frequency_penalty=model_configuration.frequency_penalty,
+                presence_penalty=model_configuration.presence_penalty,
+                stop=None,
+                stream=False,
+                seed=100
+            )
+            model_response = response.choices[0].message.content
+            logger.info(f"Retry Model Response is {response}")
+
+            if model_response is None or model_response == "":
+                main_response = "No Response from Model. Please try again."
+            else:
+                main_response, follow_up_questions, total_tokens = await extract_json_content(response)
+
+        except Exception as final_ex:
+            logger.error(f"Retry also failed: {final_ex}", exc_info=True)
+            total_tokens = len(token_encoder.encode(str(conversations)))
+            main_response = f"All Azure OpenAI endpoints failed. Please try again later.\n\n Exception Details : {str(final_ex)}"
+    
+    except BadRequestError as be:
+        logger.error(f"BadRequestError occurred while fetching model response: {be}", exc_info=True)
+        total_tokens = len(token_encoder.encode(str(conversations)))
+        main_response = f"Bad Request error occurred while reaching to Azure Open AI. \n\n Exception Details : " + be.message
+    
     except Exception as e:
         logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
-        main_response = str(e)
-    
+        main_response = f"Error occurred while fetching model response: \n\n" + str(e)
     return {
         "model_response": main_response,
         "total_tokens": total_tokens,
@@ -447,55 +533,99 @@ async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration
 async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, save_response_to_db: bool):
     # Get Azure Open AI Client and fetch response
     #client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version, True)
-    client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, True)
-    model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
-
     try:
-        full_response_content = ""
-        
-        async def stream_processor():
-            nonlocal full_response_content
+        client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, True)
+        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
+
+        try:
+            full_response_content = ""
             
-            response = await client.chat.completions.create(
-                model=GPT_4o_2_MODEL_NAME,
-                messages=conversations,
-                max_completion_tokens=model_configuration.max_tokens,
-                temperature=model_configuration.temperature,
-                top_p=model_configuration.top_p,
-                frequency_penalty=model_configuration.frequency_penalty,
-                presence_penalty=model_configuration.presence_penalty,
-                stop=None,
-                stream=True,
-                seed=100
-            )
+            async def stream_processor():
+                nonlocal full_response_content
+                nonlocal client
+                
+                try:
+                    response = await client.chat.completions.create(
+                        model=GPT_4o_2_MODEL_NAME,
+                        messages=conversations,
+                        max_completion_tokens=model_configuration.max_tokens,
+                        temperature=model_configuration.temperature,
+                        top_p=model_configuration.top_p,
+                        frequency_penalty=model_configuration.frequency_penalty,
+                        presence_penalty=model_configuration.presence_penalty,
+                        stop=None,
+                        stream=True,
+                        seed=100
+                    )
+                    
+                    async for chunk in response:
+                        nonlocal full_response_content
+
+                        if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
+                            logger.info(f"chunk.choices[0].delta {chunk.choices[0].delta}")
+                            chunkContent = chunk.choices[0].delta.content
+                            if chunkContent is not None:
+                                full_response_content += chunkContent
+                                yield chunkContent
+                except (APIConnectionError, RateLimitError) as conn_ex:
+                    logger.warning(f"Connection/Rate limit error encountered: {conn_ex}")
+                    try:
+                        client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
+                        response = await client.chat.completions.create(
+                            model=GPT_4o_2_MODEL_NAME,
+                            messages=conversations,
+                            max_completion_tokens=model_configuration.max_tokens,
+                            temperature=model_configuration.temperature,
+                            top_p=model_configuration.top_p,
+                            frequency_penalty=model_configuration.frequency_penalty,
+                            presence_penalty=model_configuration.presence_penalty,
+                            stop=None,
+                            stream=True,
+                            seed=100
+                        )
+
+                        async for chunk in response:
+                            if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
+                                chunkContent = chunk.choices[0].delta.content
+                                if chunkContent is not None:
+                                    full_response_content += chunkContent
+                                    yield chunkContent
+                    except Exception as retry_ex:
+                        logger.error(f"Retry also failed: {retry_ex}")
+                        full_response_content = f"All endpoints failed due to: {str(retry_ex)}"
+                        yield full_response_content
             
-            async for chunk in response:
+            # Create a wrapper generator that handles post-stream processing
+            async def response_wrapper():
                 nonlocal full_response_content
 
-                if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
-                    logger.info(f"chunk.choices[0].delta {chunk.choices[0].delta}")
-                    chunkContent = chunk.choices[0].delta.content
-                    if chunkContent is not None:
-                        full_response_content += chunkContent
-                        yield chunkContent
-        
-        # Create a wrapper generator that handles post-stream processing
-        async def response_wrapper():
-            nonlocal full_response_content
+                try:
+                    async for chunk in stream_processor():
+                        yield chunk
 
-            try:
-                async for chunk in stream_processor():
-                    yield chunk
-            finally:
-                # This block ensures post-stream processing happens after the stream is complete
-                if full_response_content is not None:
-                    nonlocal gpt
-                    # update the response to database
-                    if save_response_to_db:
-                        await saveAssistantResponse(full_response_content, gpt, conversations)
+                except BadRequestError as be:
+                    logger.error(f"BadRequestError occurred while fetching model response: {be}", exc_info=True)
+                    full_response_content = f"Bad Request error occurred while reaching to Azure Open AI. \n\n Exception Details : " + be.message
+                    yield full_response_content
+
+                except Exception as e:
+                    logger.error(f"Exception occurred while fetching model response: {e}", exc_info=True)
+                    #yield str(re)
+                    full_response_content = f"Exception occurred while fetching model response: {str(e)}."
+                    yield full_response_content
+                finally:
+                    # This block ensures post-stream processing happens after the stream is complete
+                    if full_response_content is not None:
+                        nonlocal gpt
+                        # update the response to database
+                        if save_response_to_db:
+                            await saveAssistantResponse(full_response_content, gpt, conversations)
+            
+            return StreamingResponse(response_wrapper(), media_type="text/event-stream")
         
-        return StreamingResponse(response_wrapper(), media_type="text/event-stream")
-    
+        except Exception as e:
+            logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
+            return StreamingResponse(iter([str(e)]), media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
         return StreamingResponse(iter([str(e)]), media_type="text/event-stream")

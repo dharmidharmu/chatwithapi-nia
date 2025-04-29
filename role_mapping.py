@@ -126,7 +126,7 @@ FUNCTION_CALLING_SYSTEM_MESSAGE = """
 FUNCTION_CALLING_USER_MESSAGE = """
     User Query : {query}
     Use Case : {use_case}
-    Rephrased Query : Re-phrase the query to better capture intent and context.
+    Rephrased Query : Re-phrase the query to better capture intent and context, maintaining a formal tone and ensuring no key details are omitted for accurate results.
     Image Details : {image_details}
     Conversation History : {conversation_history}
 """
@@ -1317,6 +1317,7 @@ REASONING STEPS:
 5. Assess if the documentation fully answers the query
 6. Consider what format would present this information most clearly
 7. Determine if clarification is needed for ambiguous queries
+8. Generate multiple responses, then evaluate each one for consistency and alignment with the original query and any provided context. If a response is unsatisfactory, regenerate it before returning it to the user. Continue this process until a satisfactory response is generated
 
 RETRIEVED DATA:
 {sources}
