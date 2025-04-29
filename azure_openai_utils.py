@@ -800,7 +800,6 @@ async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: s
                                                  semantic_configuration_name = semantic_configuration_name,
                                                  select=selected_fields)
         additional_search_results = []
-
         if get_extra_data:
             # Create a search client
             additional_azure_ai_search_client = SearchClient(
@@ -814,19 +813,24 @@ async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: s
                                                  include_total_count=True, 
                                                  query_type="semantic",
                                                  semantic_configuration_name = NIA_FINOLEX_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME,
-                                                 select=selected_fields)
-
+                                                 select=["Name_of_Supplier", "Purchase_Order_Number", "Purchase_Order_Date", "Expense_Made_For", "Quantity", "Net_Price", "Total_Expense", "Supplier_Supplying_Plant", "Currency"])
+            
+            logger.info(f"search endpoint url {NIA_FINOLEX_SEARCH_INDEX}\n semantic config {NIA_FINOLEX_PDF_SEARCH_SEMANTIC_CONFIGURATION_NAME}")
+            
+            logger.info(f"Additional Context Information: {additional_search_results}")
+            additional_results_list = [result for result in additional_search_results]
+            additional_results_formatted = json.dumps(additional_results_list, default=lambda x: x.__dict__, indent=2)
+            logger.info(f"Additional Context Information: {additional_results_formatted}")
         
         logger.info("Documents in Azure Search:")
 
         # Convert SearchItemPaged to a list of dictionaries
         results_list = [result for result in search_results]
-        additional_results_list = [result for result in additional_search_results]
 
         # Serialize the results
         sources_formatted = json.dumps(results_list, default=lambda x: x.__dict__, indent=2)
-        additional_results_formatted = json.dumps(additional_results_list, default=lambda x: x.__dict__, indent=2)
         logger.info(f"Context Information: {sources_formatted}")
+        
     except Exception as e:
         sources_formatted = ""
         additional_results_formatted = ""
