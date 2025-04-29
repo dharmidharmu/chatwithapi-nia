@@ -740,7 +740,8 @@ async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: s
 
     sources_formatted = ""
     additional_results_formatted = ""
-    get_extra_data = get_extra_data if get_extra_data is None else False
+    logger.info(f"Search Query: {search_query} \nUse Case: {use_case} \nGet Extra Data: {get_extra_data}")
+    get_extra_data = True if get_extra_data is not None else False
 
     # Your MSAL app credentials (Client ID, Client Secret, Tenant ID)
     client_id = os.getenv("CLIENT_ID")
@@ -801,6 +802,7 @@ async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: s
                                                  select=selected_fields)
         additional_search_results = []
         if get_extra_data:
+            logger.info("Fetching additional data from Azure Search")
             # Create a search client
             additional_azure_ai_search_client = SearchClient(
                 endpoint=os.getenv("SEARCH_ENDPOINT_URL"),
@@ -933,7 +935,7 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
 
     # Initial user message
     function_calling_conversations.append({"role": "system", "content":FUNCTION_CALLING_SYSTEM_MESSAGE}) # Single function call
-    function_calling_conversations.append({"role": "user", "content": FUNCTION_CALLING_USER_MESSAGE.format(query=search_query,conversation_history=conversations,image_details=image_response)}) # Single function call
+    function_calling_conversations.append({"role": "user", "content": FUNCTION_CALLING_USER_MESSAGE.format(query=search_query,use_case=use_case, conversation_history=conversations,image_details=image_response)}) # Single function call
     #messages = [{"role": "user", "content": "What's the current time in San Francisco, Tokyo, and Paris?"}] # Parallel function call with a single tool/function defined
 
     # Define the function for the model
@@ -997,7 +999,7 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
                     data, additional_data = await get_data_from_azure_search(
                         search_query=function_args.get("search_query"),
                         use_case=function_args.get("use_case"),
-                        get_extra_data=function_args.get("get_extra_data"),
+                        get_extra_data= function_args.get("get_extra_data") if use_case == "DOC_SEARCH" else False, # Only for doc search the fetch of extra data must be enabled
                         gpt_id = gpt_id
                     )
 

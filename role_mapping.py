@@ -117,17 +117,18 @@ FUNCTION_CALLING_SYSTEM_MESSAGE = """
     You are an extremely powerful AI agent with analytic skills in extracting context and deciding agent to call functions to get context data, based on the previous conversations to support an e-commerce store AI agent.
     - You are provided with user query, conversation history and description of image (optional)
     - Your task to is to decide if to do a function calling to get data from the connected dataset or to generate a response based on the query.
-    - Do a deeper analysis on the input query and decide if it might need additional context. If yes then send the ```get_extra_data``` parameter to true and call the function ```get_data_from_azure_search```. The default value for ```get_extra_data``` is false.
+    - Analyze the input query thoroughly to determine if additional context is needed if the use case is ```DOC_SEARCH```. If additional context would improve the response, set the ```get_extra_data``` parameter to true when calling the ```get_data_from_azure_search``` function. The default value for ```get_extra_data``` is false.
     - If the intent requires information from the connected dataset (which in most cases will require), only then invoke ```get_data_from_azure_search``` function.
     - Don't make any assumptions about what values, arguments to use with functions. Ask for clarification if a user request is ambiguous.
     - Only use the functions and parameters you have been provided with.
 """
 
 FUNCTION_CALLING_USER_MESSAGE = """
-     User Query : {query}
-     Rephrased Query : Re-phrase the query based on the context.
-     Image Details : {image_details}
-     Conversation History : {conversation_history}
+    User Query : {query}
+    Use Case : {use_case}
+    Rephrased Query : Re-phrase the query to better capture intent and context.
+    Image Details : {image_details}
+    Conversation History : {conversation_history}
 """
 
 USE_CASES_LIST = ['SEARCHING_ORDERS', 'SUMMARIZE_PRODUCT_REVIEWS', 'TRACK_ORDERS', 'TRACK_ORDERS_TKE', 'MANAGE_TICKETS', 'ANALYZE_SPENDING_PATTERNS', 'CUSTOMER_COMPLAINTS', 'PRODUCT_COMPARISON', 'CUSTOMIZED_RECOMMENDATIONS', 'GENERATE_REPORTS', 'PRODUCT_INFORMATION', 'COMPLAINTS_AND_FEEDBACK', 'HANDLE_FAQS', 'SEASONAL_SALES', 'GENERATE_MAIL_PROMOTION', 'GENERATE_MAIL_ORDERS', 'REVIEW_BYTES', 'DOC_SEARCH']
