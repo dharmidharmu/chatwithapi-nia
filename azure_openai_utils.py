@@ -870,8 +870,9 @@ async def get_data_from_azure_search(search_query: str, use_case: str, gpt_id: s
 
     sources_formatted = ""
     additional_results_formatted = ""
+    
+    get_extra_data = bool(get_extra_data)
     logger.info(f"Search Query: {search_query} \nUse Case: {use_case} \nGet Extra Data: {get_extra_data}")
-    get_extra_data = True if get_extra_data is not None else False
 
     # Your MSAL app credentials (Client ID, Client Secret, Tenant ID)
     client_id = os.getenv("CLIENT_ID")
