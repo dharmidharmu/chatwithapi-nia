@@ -218,6 +218,7 @@ async def fetch_chat_history(gpt_id: str, gpt_name: str, limit: int):
         for chat in chat_history:
             chat["_id"] = str(chat["_id"])
             chat["gpt_id"] = str(chat["gpt_id"]) 
+            chat["use_case_id"] = str(chat["use_case_id"]) 
     
         logger.info(f"Chat History Length for {gpt_name}: {len(chat_history)}")
 
@@ -240,6 +241,7 @@ async def fetch_chat_history_for_use_case(use_case_id: str, gpt_id: str, gpt_nam
         for chat in chat_history:
             chat["_id"] = str(chat["_id"])
             chat["gpt_id"] = str(chat["gpt_id"]) 
+            chat["use_case_id"] = str(chat["use_case_id"]) 
     
         logger.info(f"Chat History Length for {gpt_name}: {len(chat_history)}")
 
