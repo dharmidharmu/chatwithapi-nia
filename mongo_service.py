@@ -354,6 +354,16 @@ async def get_usecases(gpt_id: str):
 
     return usecases
 
+async def get_prompts(gpt_id: str, use_case_name: str):
+    """
+    Fetch the prompt field for a given GPT ID and use case name from the "prompts" collection.
+    """
+    prompts_collection = await get_collection("usecases")
+    prompt = await prompts_collection.find_one({"gpt_id": ObjectId(gpt_id), "name": use_case_name})
+    logger.info(f"prompt: {prompt}")
+
+    return prompt.get("prompts") if prompt else None
+
 async def convert_json_to_mongo_format(json_data):
     # Convert the json with ObjectId strings into a proper MongoDB format
     converted_data = []

@@ -29,7 +29,7 @@ from data.GPTData import GPTData
 from data.ModelConfiguration import ModelConfiguration
 from gpt_utils import handle_upload_files, create_folders
 from azure_openai_utils import generate_response, get_azure_openai_deployments, call_maf
-from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message, get_collection
+from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message, get_collection, get_prompts
 from routes.ilama32_routes import router as ilama32_router
 
 import uvicorn
@@ -652,6 +652,28 @@ async def fetch_usecases(gpt_id: str):
         response = JSONResponse({"error": f"Error occurred while fetching usecases: {e}"}, status_code=500)
     
     return response
+
+@app.get("/get_prompts/{gpt_id}/{usecase}")
+async def get_prompts_for_usecase(gpt_id: str, usecase: str):
+    """
+    Fetch the use case by ID and return the 'prompt' field.
+    """
+    try:
+        # Fetch the use case details for the given GPT ID and use case ID
+        prompts = await get_prompts(gpt_id, usecase)
+        # logger.info(f"Prompts fetched successfully: {len(prompts)}")
+        logger.info(f"Prompts: {prompts}")
+
+        if not usecase:
+            return JSONResponse({"error": "Use case not found"}, status_code=404)
+
+        # Extract the 'prompt' field from the use case
+        
+
+        return JSONResponse({"prompts": prompts}, status_code=200)
+    except Exception as e:
+        logger.error(f"Error occurred while fetching prompts: {e}", exc_info=True)
+        return JSONResponse({"error": f"Error occurred while fetching prompts: {e}"}, status_code=500)
         
 @app.get("/logs")
 async def get_logs():

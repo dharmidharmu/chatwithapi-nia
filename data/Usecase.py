@@ -1,6 +1,10 @@
 from pydantic import BaseModel
 from datetime import datetime
 from bson import ObjectId
+from typing import List, Dict
+class Prompt(BaseModel):
+    role: str
+    prompt: str
 
 class Usecase(BaseModel): 
     _id: ObjectId
@@ -10,4 +14,5 @@ class Usecase(BaseModel):
     instructions: str
     index_name: str
     semantic_configuration_name: str
+    prompts: List[Prompt]
     created_at: str = datetime.now().isoformat()
