@@ -30,6 +30,7 @@ from data.ModelConfiguration import ModelConfiguration
 from gpt_utils import handle_upload_files, create_folders
 from azure_openai_utils import generate_response, get_azure_openai_deployments, call_maf
 from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message, get_collection, get_prompts
+from prompt_utils import PromptValidator
 from routes.ilama32_routes import router as ilama32_router
 
 import uvicorn
@@ -702,6 +703,30 @@ async def getDeployedModelsFromAzure():
     except Exception as e:
         logger.error(f"Error occurred while fetching deployments: {e}", exc_info=True)
         response = JSONResponse({"error": f"Error occurred while fetching deployments: {e}"}, status_code=500)
+    return response
+
+@app.post("/refinePrompt/{gpt_id}")
+async def refinePrompt(request: Request, gpt_id: str):
+    """Refine the prompt based on the user query."""
+    validator = PromptValidator()
+    response: str = ""
+    system_prompt: str = None
+
+    try:
+        data = await request.json()
+        input_prompt = data.get("prompt", "")
+        logger.info(f"Input prompt (Original) : {input_prompt} Length : {len(data["prompt"])}")
+
+        if gpt_id is not None:
+            gpt_data: GPTData = await get_gpt_by_id(gpt_id)
+            system_prompt = gpt_data["instructions"]
+
+        # Process prompt
+        response = validator.process_prompt_optimized(input_prompt, system_prompt)
+    except Exception as e:
+            logger.error(f"Error occurred while refining prompt: {e}", exc_info=True)
+            response = JSONResponse({"refined_prompt": input_prompt}, status_code=200)
+
     return response
 
 @app.get("/get_image/{imagePath}",
