@@ -746,7 +746,7 @@ async def refinePrompt(request: Request, gpt_id: str, usecase: str, user: str):
     try:
         data = await request.json()
         input_prompt = data.get("prompt", "")
-        logger.info(f"Input prompt (Original) : {input_prompt} Length : {len(data["prompt"])}")
+        logger.info(f"Input prompt (Original) : {input_prompt} Length : {len(data['prompt'])}")
 
         if gpt_id is not None:
             gpt_data: GPTData = await get_gpt_by_id(gpt_id)
