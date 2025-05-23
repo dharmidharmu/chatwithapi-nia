@@ -5,6 +5,9 @@ from typing import List, Dict
 class Prompt(BaseModel):
     role: str
     prompt: str
+    key: str
+    title: str
+    user: str
 
 class Usecase(BaseModel): 
     _id: ObjectId

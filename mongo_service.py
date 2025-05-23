@@ -354,15 +354,103 @@ async def get_usecases(gpt_id: str):
 
     return usecases
 
-async def get_prompts(gpt_id: str, use_case_name: str):
+async def get_prompts(gpt_id: str, use_case_name: str, user: str):
     """
     Fetch the prompt field for a given GPT ID and use case name from the "prompts" collection.
     """
     prompts_collection = await get_collection("usecases")
     prompt = await prompts_collection.find_one({"gpt_id": ObjectId(gpt_id), "name": use_case_name})
+    if prompt is not None:
+        # Filter prompt fields to only include those where the user matches
+        filtered_prompts = []
+        if "prompts" in prompt and isinstance(prompt["prompts"], list):
+            for item in prompt["prompts"]:
+                if isinstance(item, dict) and item.get("user") == user:
+                    filtered_prompts.append(item)
+        prompt["prompts"] = filtered_prompts
     logger.info(f"prompt: {prompt}")
 
     return prompt.get("prompts") if prompt else None
+
+async def update_prompt(gpt_id: str, use_case_name: str, user: str, refinedPrompt: str):
+    """
+    Fetch the prompt field for a given GPT ID and use case name from the "prompts" collection.
+    """
+    prompts_collection = await get_collection("usecases")
+    prompt = await prompts_collection.find_one({"gpt_id": ObjectId(gpt_id), "name": use_case_name})
+    if prompt is not None:
+        # Filter prompt fields to only include those where the user matches
+
+        existing_keys = set()
+        if "prompts" in prompt and isinstance(prompt["prompts"], list):
+            for item in prompt["prompts"]:
+                if isinstance(item, dict):
+                    if "key" in item:
+                        existing_keys.add(item["key"])
+        # Generate next key (e.g., K001, K002, ...)
+        next_key_num = 1
+        while True:
+            next_key = f"K{next_key_num:03d}"
+            if next_key not in existing_keys:
+                break
+            next_key_num += 1
+
+        # Add new entry
+        next_key = f"K{next_key_num:03d}"
+        new_prompt_entry = {
+            "role": "Assistant/Helper",
+            "prompt": refinedPrompt,
+            "key": next_key,
+            "title": "Simple Prompt",
+            "user": user
+        }
+        if "prompts" not in prompt or not isinstance(prompt["prompts"], list):
+            prompt["prompts"] = []
+        prompt["prompts"].append(new_prompt_entry)
+
+        try:
+            # Update only the prompts array in the document, not the whole prompt object
+            await prompts_collection.update_one(
+            {"_id": prompt["_id"]},
+            {"$set": {"prompts": prompt["prompts"]}}
+            )
+            logger.info(f"prompt: {prompt}")
+            return {"status": "success"}
+        except Exception as e:
+            logger.error(f"Error updating prompt: {e}")
+            return {"status": "error"}
+
+async def delete_prompt(gpt_id: str, use_case_name: str, user: str, key: str):
+    """
+    Delete a prompt entry for a given GPT ID, use case name, user, and prompt key from the "prompts" collection.
+    """
+    prompts_collection = await get_collection("usecases")
+    prompt = await prompts_collection.find_one({"gpt_id": ObjectId(gpt_id), "name": use_case_name})
+    if prompt is not None and "prompts" in prompt and isinstance(prompt["prompts"], list):
+        # Filter out the prompt with the matching key and user
+        original_count = len(prompt["prompts"])
+        prompt["prompts"] = [
+            item for item in prompt["prompts"]
+            if not (isinstance(item, dict) and item.get("key") == key and item.get("user") == user)
+        ]
+        if len(prompt["prompts"]) < original_count:
+            try:
+                await prompts_collection.update_one(
+                    {"_id": prompt["_id"]},
+                    {"$set": {"prompts": prompt["prompts"]}}
+                )
+                logger.info(f"Deleted prompt with key: {key} for user: {user}")
+                return {"status": "success"}
+            except Exception as e:
+                logger.error(f"Error deleting prompt: {e}")
+                return {"status": "error"}
+        else:
+            logger.info(f"No prompt found with key: {key} for user: {user}")
+            return {"status": "not_found"}
+    else:
+        logger.info("Prompt document not found or no prompts array present.")
+        return {"status": "not_found"}
+
 
 async def convert_json_to_mongo_format(json_data):
     # Convert the json with ObjectId strings into a proper MongoDB format

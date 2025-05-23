@@ -240,6 +240,7 @@ class PromptValidator:
             
             # Create and return the validation result with justifications
             return PromptValidationResult(
+                original_prompt=prompt,
                 refined_prompt=refined_prompt,
                 pre_evaluation_result=pre_evaluation_result,
                 post_evaluation_result=post_evaluation_result,
