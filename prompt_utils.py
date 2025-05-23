@@ -1,7 +1,8 @@
 import json
 import logging
+import re
 
-from openai import AzureOpenAI
+from openai import AsyncAzureOpenAI
 from PromptValidationResult import PromptValidationResult
 from typing import Optional, Dict
 from azure_openai_utils import (GPT_4o_ENDPOINT_URL, GPT_4o_API_KEY, GPT_4o_API_VERSION, GPT_4o_MODEL_NAME)
@@ -36,7 +37,7 @@ class PromptValidator:
         """Initialize with optional LLM API client (e.g., xAI API for Grok 3)."""
         self.llm_api = llm_api  # Placeholder for LLM API client
     
-    def call_llm(self, instruction: str, temperature: float = 0.3, top_p: float = 0.95) -> str:
+    async def call_llm(self, instruction: str, temperature: float = 0.3, top_p: float = 0.95) -> str:
         """
         Call the LLM API with enhanced prompt engineering capabilities.
         """
@@ -62,12 +63,12 @@ class PromptValidator:
             {"role": "user", "content": instruction}
         ]
 
-        azure_openai_client = AzureOpenAI(
+        azure_openai_client = AsyncAzureOpenAI(
             azure_endpoint=GPT_4o_ENDPOINT_URL, 
             api_key=GPT_4o_API_KEY, 
             api_version=GPT_4o_API_VERSION)
         
-        response = azure_openai_client.chat.completions.create(
+        response = await azure_openai_client.chat.completions.create(
             model=GPT_4o_MODEL_NAME,
             messages=conversations,
             max_tokens=1200,  # Increased to accommodate justifications
@@ -79,30 +80,91 @@ class PromptValidator:
         return model_response
 
     def extract_json_from_response(self, response: str) -> str:
-        """Extract valid JSON from a potentially noisy LLM response."""
-        # Try to find JSON between curly braces
-        import re
-        json_match = re.search(r'({.*?})', response.replace('\n', ' '), re.DOTALL)
+        """
+        Extract valid JSON from a potentially noisy LLM response.
+        Uses multiple strategies to find and validate JSON in the response.
+        """
+        if not response:
+            return "{}"
+            
+        # Try to find JSON between triple backticks first (common format)
+        json_match = re.search(r'```(?:json)?\s*({[\s\S]*?})\s*```', response)
         if json_match:
             potential_json = json_match.group(1)
             try:
-                # Validate it's proper JSON
-                json.loads(potential_json)
+                json.loads(potential_json)  # Validate it's proper JSON
                 return potential_json
             except:
-                pass
+                pass  # If invalid, continue to other methods
+                
+        # Try to find the outermost JSON object with balanced braces
+        stack = []
+        start_index = None
         
-        # If no valid JSON found with regex, try to clean up the response
-        # Look for the beginning of JSON
-        if '{' in response and '}' in response:
-            start = response.find('{')
-            end = response.rfind('}') + 1
-            return response[start:end]
+        for i, char in enumerate(response):
+            if char == '{':
+                if not stack:  # First opening brace
+                    start_index = i
+                stack.append('{')
+            elif char == '}':
+                if stack and stack[-1] == '{':
+                    stack.pop()
+                    if not stack:  # We've found a complete JSON object
+                        try:
+                            json_candidate = response[start_index:i+1]
+                            json.loads(json_candidate)  # Validate
+                            return json_candidate
+                        except:
+                            pass  # If invalid, continue searching
+
+        # If previous methods fail, try a more aggressive approach with regex
+        try:
+            # Look for any JSON-like structure with balanced braces
+            json_pattern = r'{(?:[^{}]|(?R))*}'
+            matches = re.findall(r'{.*}', response, re.DOTALL)
+            
+            # Try each match from longest to shortest
+            for match in sorted(matches, key=len, reverse=True):
+                try:
+                    # Clean up common issues in LLM outputs
+                    cleaned_json = self._clean_json_string(match)
+                    json.loads(cleaned_json)
+                    return cleaned_json
+                except:
+                    continue
+        except:
+            pass
+            
+        # Last resort: if JSON validation fails, return a minimal valid JSON
+        logger.warning("Could not extract valid JSON from LLM response. Using fallback format.")
+        return '{"error": "Could not parse valid JSON from response"}'
         
-        # Return the original if we couldn't extract JSON
-        return response
+    def _clean_json_string(self, json_str):
+        """Helper method to clean common JSON formatting issues in LLM outputs"""
+        # Remove trailing commas before closing braces/brackets
+        json_str = re.sub(r',\s*}', '}', json_str)
+        json_str = re.sub(r',\s*]', ']', json_str)
+        
+        # Fix missing quotes around keys
+        json_str = re.sub(r'([{,])\s*([a-zA-Z0-9_]+)\s*:', r'\1"\2":', json_str)
+        
+        # Fix single quotes used instead of double quotes
+        in_string = False
+        result = []
+        i = 0
+        while i < len(json_str):
+            if json_str[i] == '"':
+                in_string = not in_string
+            elif json_str[i] == "'" and not in_string:
+                result.append('"')
+                i += 1
+                continue
+            result.append(json_str[i])
+            i += 1
+        
+        return ''.join(result)
     
-    def process_prompt_optimized(self, prompt: str, system_prompt: Optional[str] = None) -> PromptValidationResult:
+    async def process_prompt_optimized(self, prompt: str, system_prompt: Optional[str] = None) -> PromptValidationResult:
         """
         Enhanced prompt processing that analyzes, evaluates with justification, refines, and re-evaluates prompts.
         
@@ -225,7 +287,7 @@ class PromptValidator:
         
         # Call the LLM with the full analysis instruction
         try:
-            analysis_response = self.call_llm(refinement_instruction, temperature=0.2)
+            analysis_response = await self.call_llm(refinement_instruction, temperature=0.2)
             logger.info(f"LLM Analysis Response: {analysis_response}")
             analysis_json = self.extract_json_from_response(analysis_response)
             data = json.loads(analysis_json)

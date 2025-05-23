@@ -27,6 +27,7 @@ from azure.core.exceptions import AzureError
 from pymongo.errors import DuplicateKeyError
 from data.GPTData import GPTData
 from data.ModelConfiguration import ModelConfiguration
+from data.InputPrompt import InputPrompt
 from gpt_utils import handle_upload_files, create_folders
 from azure_openai_utils import generate_response, get_azure_openai_deployments, call_maf
 from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message, get_collection, get_prompts, update_prompt, delete_prompt
@@ -748,34 +749,39 @@ async def getDeployedModelsFromAzure():
         response = JSONResponse({"error": f"Error occurred while fetching deployments: {e}"}, status_code=500)
     return response
 
+
 @app.post("/refinePrompt/{gpt_id}/{usecase}/{user}")
-async def refinePrompt(request: Request, gpt_id: str, usecase: str, user: str):
+async def refinePrompt(
+    request: Request,
+    gpt_id: str,
+    usecase: str,
+    user: str,
+    body: InputPrompt = Body(...)
+):
     """Refine the prompt based on the user query."""
     validator = PromptValidator()
     response: str = ""
     system_prompt: str = None
 
     try:
-        data = await request.json()
-        input_prompt = data.get("prompt", "")
-        logger.info(f"Input prompt (Original) : {input_prompt} Length : {len(data['prompt'])}")
+        input_prompt = body.prompt
+        logger.info(f"Input prompt (Original) : {input_prompt} Length : {len(input_prompt)}")
 
         if gpt_id is not None:
             gpt_data: GPTData = await get_gpt_by_id(gpt_id)
             system_prompt = gpt_data["instructions"]
 
         # Process prompt
-        response = validator.process_prompt_optimized(input_prompt, system_prompt)
-        refinedPrompt = response["refined_prompt"]
+        response = await validator.process_prompt_optimized(input_prompt, system_prompt)
+        refinedPrompt = response.refined_prompt
         logger.info(f"Refined prompt : {refinedPrompt} Length : {len(refinedPrompt)}")
         update_response = await update_prompt(gpt_id, usecase, user, refinedPrompt)
         logger.info(f"Prompt updated: {update_response}")
 
+        return JSONResponse({"refined_prompt": response.dict() if hasattr(response, "dict") else response.__dict__}, status_code=200)
     except Exception as e:
-            logger.error(f"Error occurred while refining prompt: {e}", exc_info=True)
-            response = JSONResponse({"refined_prompt": input_prompt}, status_code=200)
-
-    return response
+        logger.error(f"Error occurred while refining prompt: {e}", exc_info=True)
+        return JSONResponse({"refined_prompt": input_prompt}, status_code=200)
 
 @app.get("/get_image/{imagePath}",
 
