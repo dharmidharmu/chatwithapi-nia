@@ -29,7 +29,7 @@ from data.GPTData import GPTData
 from data.ModelConfiguration import ModelConfiguration
 from gpt_utils import handle_upload_files, create_folders
 from azure_openai_utils import generate_response, get_azure_openai_deployments, call_maf
-from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message, get_collection, get_prompts
+from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message, get_collection, get_prompts, update_prompt, delete_prompt
 from prompt_utils import PromptValidator
 from routes.ilama32_routes import router as ilama32_router
 
@@ -675,6 +675,36 @@ async def get_prompts_for_usecase(gpt_id: str, usecase: str):
         logger.error(f"Error occurred while fetching prompts: {e}", exc_info=True)
         return JSONResponse({"error": f"Error occurred while fetching prompts: {e}"}, status_code=500)
 
+@app.post("/update_prompt/{gpt_id}/{usecase}/{user}/{refinedPrompt}")
+async def update_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, refinedPrompt: str):
+    try:
+
+        if not all([gpt_id, usecase, user, refinedPrompt]):
+            return JSONResponse({"success": False, "error": "Missing required fields"}, status_code=400)
+
+        result = await update_prompt(gpt_id, usecase, user, refinedPrompt)
+        logger.info(f"Prompt updated successfully: {result}")
+        return JSONResponse({"success": True}, status_code=200)
+        
+
+    except Exception as e:
+        logger.error(f"Error in update_prompt_for_usecase: {e}", exc_info=True)
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+@app.delete("/delete_prompt/{gpt_id}/{usecase}/{user}/{key}")
+async def delete_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, key: str):
+    try:
+        if not all([gpt_id, usecase, user, key]):
+            return JSONResponse({"success": False, "error": "Missing required fields"}, status_code=400)
+
+        result = await delete_prompt(gpt_id, usecase, user, key)
+        logger.info(f"Prompt deleted successfully: {result}")
+        return JSONResponse({"success": True}, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Error in delete_prompt_for_usecase: {e}", exc_info=True)
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
 @app.get("/logs")
 async def get_logs():
     """Fetch the contents of the app.log file."""
@@ -689,6 +719,7 @@ async def get_logs():
     logger.info(log_filename)  
 
     return {"log_content": log_content}
+
 
 @app.get("/deployedModels")
 async def getDeployedModelsFromAzure():
@@ -705,8 +736,8 @@ async def getDeployedModelsFromAzure():
         response = JSONResponse({"error": f"Error occurred while fetching deployments: {e}"}, status_code=500)
     return response
 
-@app.post("/refinePrompt/{gpt_id}")
-async def refinePrompt(request: Request, gpt_id: str):
+@app.post("/refinePrompt/{gpt_id}/{usecase}/{user}")
+async def refinePrompt(request: Request, gpt_id: str, usecase: str, user: str):
     """Refine the prompt based on the user query."""
     validator = PromptValidator()
     response: str = ""
@@ -723,6 +754,11 @@ async def refinePrompt(request: Request, gpt_id: str):
 
         # Process prompt
         response = validator.process_prompt_optimized(input_prompt, system_prompt)
+        refinedPrompt = response["refined_prompt"]
+        logger.info(f"Refined prompt : {refinedPrompt} Length : {len(refinedPrompt)}")
+        update_response = await update_prompt(gpt_id, usecase, user, refinedPrompt)
+        logger.info(f"Prompt updated: {update_response}")
+
     except Exception as e:
             logger.error(f"Error occurred while refining prompt: {e}", exc_info=True)
             response = JSONResponse({"refined_prompt": input_prompt}, status_code=200)
