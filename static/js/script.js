@@ -168,11 +168,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if($("#newGptModalLabel").text().indexOf("Edit") !== -1){
             currentMode === "edit";
-            url = `/update_gpt/${current_gpt_id}/${gptName}`;
+            url = `backend/update_gpt/${current_gpt_id}/${gptName}`;
             method = 'PUT';
         }else {
             currentMode === "new";
-            url = '/create_gpt';
+            url = 'backend/create_gpt';
             method = 'POST';
         }
 
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     async function getUseCases(gpt){
-        await fetch(`/usecases/${gpt._id}`)
+        await fetch(`backend/usecases/${gpt._id}`)
         .then(response => {
             if (!response.ok) {
                 handleErrors(response);
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         //const clearGPTButton = document.querySelector('.clear-gpt-button');
                         //clearGPTButton.click(); // Clear the chat history
                         //alert(useCase._id);
-                        fetch(`/update_instruction/${gpt._id}/${gpt.name}/${useCase._id}`, {
+                        fetch(`backend/update_instruction/${gpt._id}/${gpt.name}/${useCase._id}`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -317,7 +317,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function displayGPTs() {
-        fetch('/get_gpts')
+        fetch('backend/get_gpts')
             .then(response => {
                 if (!response.ok) {
                     handleErrors(response);
@@ -412,7 +412,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     clearGPTButton.addEventListener('click', (event) => {
                         event.stopPropagation(); // Prevent link click from firing
                         if (confirm("Are you sure you want to clear the chat history? This action cannot be undone.")) {
-                            fetch(`/clear_chat_history/${gpt._id}/${gpt.name}`, {
+                            fetch(`backend/clear_chat_history/${gpt._id}/${gpt.name}`, {
                                 method: 'PUT'
                             })
                             .then(response => {
@@ -444,7 +444,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     deleteGPTButton.addEventListener('click', (event) => {
                         event.stopPropagation(); // Prevent link click from firing
                         if (confirm("Are you sure you want to delete this GPT? This action cannot be undone.")) {
-                            fetch(`/delete_gpt/${gpt._id}/${gpt.name}`, {
+                            fetch(`backend/delete_gpt/${gpt._id}/${gpt.name}`, {
                                 method: 'DELETE' 
                             })
                             .then(response => {
@@ -481,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function loadChatHistory(gpt_id, gpt_name){
-        await fetch(`/chat_history/${gpt_id}/${gpt_name}`)
+        await fetch(`backend/chat_history/${gpt_id}/${gpt_name}`)
             .then(response => {
                 if (!response.ok) {
                     console.log('Network response was not ok');
@@ -520,7 +520,7 @@ document.addEventListener('DOMContentLoaded', function () {
         showLoadingOverlay();
 
         if(deployed_model_names.length == 0){
-            await fetch(`/deployedModels`)
+            await fetch(`backend/deployedModels`)
             .then(response => {
                 if (!response.ok) {
                     console.log('Network response was not ok');
@@ -633,7 +633,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // 2. Send the message to the server
                 const isStreamingResponse = streamResponsesCheckbox && streamResponsesCheckbox.checked ? true : false;
-                const chatURL =  isStreamingResponse ? `/chat/stream/${current_gpt_id}/${gpt_name}` : `/chat/${current_gpt_id}/${gpt_name}`;
+                const chatURL =  isStreamingResponse ? `backend/chat/stream/${current_gpt_id}/${gpt_name}` : `backend/chat/${current_gpt_id}/${gpt_name}`;
 
                 // 2. Send the message to the server
                 const response = await fetch(chatURL, {

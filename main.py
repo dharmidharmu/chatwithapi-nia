@@ -1,17 +1,11 @@
 import os
 import json
-import logging
-import base64
-from pathlib import Path
-from bson import ObjectId
-import urllib.parse
-
+import msal
 import pickle
-import itsdangerous
-import requests 
+import logging
 
-from fastapi import Cookie, FastAPI, Request, UploadFile, Body, File, Form, HTTPException, Depends
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import Cookie, FastAPI, Request, Security
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,26 +13,22 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware import Middleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.responses import RedirectResponse, HTMLResponse
-import msal
 from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ClientSecretCredential
 from azure.core.exceptions import AzureError
 
-from pymongo.errors import DuplicateKeyError
-from data.GPTData import GPTData
-from data.ModelConfiguration import ModelConfiguration
-from data.InputPrompt import InputPrompt
-from gpt_utils import handle_upload_files, create_folders
-from azure_openai_utils import generate_response, get_azure_openai_deployments, call_maf
-from mongo_service import fetch_chat_history_for_use_case, get_gpt_by_id, create_new_gpt, get_gpts_for_user, update_gpt, delete_gpt, delete_gpts, delete_chat_history, fetch_chat_history, get_usecases, update_gpt_instruction, update_message, get_collection, get_prompts, update_prompt, delete_prompt
-from prompt_utils import PromptValidator
+from app_config import CLIENT_ID
+from auth_msal import verify_jwt_token
+from gpt_utils import create_folders
+from azure_openai_utils import call_maf
 from routes.ilama32_routes import router as ilama32_router
+from routes.gpt_routes_secured import router as gpt_router_secured
+from routes.gpt_routes_unsecured import router as gpt_router_unsecured
+from auth_config import azure_scheme
 
 import uvicorn
-from bson import ObjectId
 from dotenv import load_dotenv # For environment variables (recommended)
-from standalone_programs.simple_gpt import run_conversation, ticket_conversations, get_conversation
-import httpx
+from standalone_programs.simple_gpt import get_conversation
 
 delimiter = "```"
 load_dotenv()  # Load environment variables from .env file
@@ -48,6 +38,9 @@ create_folders()
 secret_key = os.getenv("SESSION_SECRET_KEY") 
 if not secret_key:
     raise ValueError("SESSION_SECRET_KEY environment variable not set. Create a new secret key")
+
+# Get environment variable to determine if we're in development or production
+is_dev_environment = os.getenv("ENVIRONMENT", "development").lower() == "development"
 
 # Configuration (from .env or equivalent)
 CONFIG = {
@@ -95,21 +88,21 @@ origins = [
             "https://customgptapp.azurewebsites.net:443",
             "https://customgptapp2.azurewebsites.net", 
             "https://customgptapp2.azurewebsites.net:443",
-            "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net",
-            "https://dharmimax-d5dsbmg8g8a9bud4.southindia-01.azurewebsites.net:443",
-            "https://niacustomgpt-fybhf3hmfbgba7dp.southindia-01.azurewebsites.net",
-            "https://niacustomgpt-fybhf3hmfbgba7dp.southindia-01.azurewebsites.net:443",
+            "https://niaapp.azurewebsites.net",
+            "https://niaapp.azurewebsites.net:443"
+            "https://niaapp2.azurewebsites.net",
+            "https://niaapp2.azurewebsites.net:443"
           ]
 
 middleware = [
- #Middleware(HTTPSRedirectMiddleware),
-#  Middleware(
-#      SessionMiddleware, 
-#      secret_key=CONFIG["SESSION_SECRET_KEY"], 
-#      same_site="lax",  # Important for cross-site requests
-#      https_only=True, # Important for security - only set cookies over HTTPS
-#      max_age=1*24*60*60  # 1 day session expiry
-#  ),
+#  Middleware(HTTPSRedirectMiddleware),
+ Middleware(
+     SessionMiddleware, 
+     secret_key=CONFIG["SESSION_SECRET_KEY"], 
+     same_site="lax",  # Important for cross-site requests
+     https_only=True,  # Only require HTTPS in production, # Important for security - only set cookies over HTTPS
+     max_age=1*24*60*60  # 1 day session expiry
+ ),
  Middleware(
      CORSMiddleware, 
      allow_origins=origins, 
@@ -119,9 +112,22 @@ middleware = [
  )
 ]
 
-app = FastAPI(middleware=middleware, trusted_hosts=["customgptapp.azurewebsites.net","niaapp2.azurewebsites.net"])
+app = FastAPI(
+    swagger_ui_oauth2_redirect_url='/oauth2-redirect',
+    swagger_ui_init_oauth={
+        'usePkceWithAuthorizationCodeGrant': True,
+        'clientId': CLIENT_ID,
+        'scopes': 'api://nia-local-app/access_as_user',
+    },
+    middleware=middleware, 
+    trusted_hosts=["customgptapp.azurewebsites.net"]
+    )
+
 # Include the routers
 app.include_router(ilama32_router, prefix="/ilama32", tags=["ilama32"])
+app.include_router(gpt_router_secured, dependencies=[Security(azure_scheme, scopes=["access_as_user"])])
+app.include_router(gpt_router_unsecured, prefix="/backend", tags=["backend"])
+#app.include_router(gpt_router, dependencies=[Security(verify_jwt_token, scopes=["access_as_user"])])
 
 # Set up Jinja2 for templating
 templates = Jinja2Templates(directory="templates")
@@ -131,91 +137,118 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- MSAL Setup ---
-# msal_app = msal.ConfidentialClientApplication(
-#     CONFIG["CLIENT_ID"],
-#     client_credential=CONFIG["CLIENT_SECRET"],
-#     authority=CONFIG["AUTHORITY"],
-#     token_cache=msal.SerializableTokenCache() # Initialize token_cache
-# )
+msal_app = msal.ConfidentialClientApplication(
+    CONFIG["CLIENT_ID"],
+    client_credential=CONFIG["CLIENT_SECRET"],
+    authority=CONFIG["AUTHORITY"],
+    token_cache=msal.SerializableTokenCache() # Initialize token_cache
+)
 
 # --- Startup and Shutdown Handlers (For Token Cache Persistence) ---
-# @app.on_event("startup")
-# async def startup_event():
-#  try:
-#      with open("token_cache.bin", "rb") as f:
-#          cache = pickle.load(f)
-#  except (FileNotFoundError, EOFError): # Handle empty file
-#      cache = msal.SerializableTokenCache()
+@app.on_event("startup")
+async def startup_event():
+ try:
+     with open("token_cache.bin", "rb") as f:
+         cache = pickle.load(f)
+ except (FileNotFoundError, EOFError): # Handle empty file
+     cache = msal.SerializableTokenCache()
 
-#  msal_app.token_cache = cache
+ msal_app.token_cache = cache
 
-# @app.on_event("shutdown")
-# async def shutdown_event():
-#  with open("token_cache.bin", "wb") as f:
-#      pickle.dump(msal_app.token_cache, f)
+@app.on_event("shutdown")
+async def shutdown_event():
+ with open("token_cache.bin", "wb") as f:
+     pickle.dump(msal_app.token_cache, f)
 
-# @app.middleware("http")
-# async def ensure_https_session_cookie(request: Request, call_next):
-#     response = await call_next(request)
-#     if request.url.scheme == "https":  
-#         if "session" in response.cookies:
-#             response.set_cookie(
-#                 "session",
-#                 response.cookies["session"],
-#                 secure=True,  # Important!
-#                 httponly=True,  # Important!
-#                 samesite="lax",
-#                 path="/",
-#             )
-#     return response
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # try:
+    #     # Add token to headers BEFORE processing the request
+    #     if hasattr(request, "session") and "access_token" in request.session:
+    #         token = request.session["access_token"]
+    #         # FastAPI/Starlette Headers are immutable, so we need to modify properly
+    #         # Create a modified scope with the new header
+    #         auth_header = f"Bearer {token}"
+    #         request.scope["headers"] = [
+    #             *request.scope["headers"],
+    #             (b"authorization", auth_header.encode())
+    #         ]
+    #         logger.info(f"Added authorization header: {auth_header}")
+    # except (AttributeError, AssertionError) as e:
+    #     logger.warning(f"Session access error: {str(e)}")
+    
+    # Now process the request with the added header
+    response = await call_next(request)
+    
+    # Handle cookies if needed
+    if request.url.scheme == "https":
+        response.set_cookie(
+            "session",
+            response.cookies["session"],
+            secure=True,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+    
+    return response
 
 # --- Authentication Routes ---
-# @app.get("/login")
-# async def login(request: Request):
-#     redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
-#     auth_url = msal_app.get_authorization_request_url(
-#         CONFIG["SCOPE"],
-#         #redirect_uri=request.url_for("getAToken"),  # FastAPI's url_for
-#         redirect_uri=redirect_uri,
-#         prompt="select_account",  # Force user to select account on each login (optional)
-#     )
-#     logger.info(f"Redirecting to: {auth_url}")
-#     return RedirectResponse(auth_url)
+@app.get("/login")
+async def login(request: Request):
+    logger.info(f"Request URL {request.url}")
+    redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
+    auth_url = msal_app.get_authorization_request_url(
+        CONFIG["SCOPE"],
+        redirect_uri=request.url_for("getAToken"),  # FastAPI's url_for
+        #redirect_uri=redirect_uri,
+        prompt="select_account",  # Force user to select account on each login (optional)
+    )
+    logger.info(f"Redirecting to: {auth_url}")
+    return RedirectResponse(auth_url)
 
-# @app.get("/getAToken", name="getAToken")
-# async def auth_response(request: Request):
-#  redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
-#  try:
-#      cache = msal.SerializableTokenCache()
-#      result = msal_app.acquire_token_by_authorization_code(
-#          request.query_params["code"],
-#          scopes=CONFIG["SCOPE"],
-#          redirect_uri=redirect_uri
-#          #redirect_uri=request.url_for("getAToken") # Ensure redirect_uri matches the original request
-#      )
+@app.get("/getAToken", name="getAToken")
+async def auth_response(request: Request):
+ redirect_uri = f"https://{request.url.hostname}/getAToken" # Explicitly construct
+ try:
+     cache = msal.SerializableTokenCache()
+     result = msal_app.acquire_token_by_authorization_code(
+         request.query_params["code"],
+         scopes=CONFIG["SCOPE"],
+         #redirect_uri=redirect_uri
+         redirect_uri=request.url_for("getAToken") # Ensure redirect_uri matches the original request
+     )
 
-#      if "error" in result:
-#          logger.error("Authentication error: " + result.get("error"))
-#          return templates.TemplateResponse("auth_error.html", {"request": request, "result": result})
+     if "error" in result:
+         logger.error("Authentication error: " + result.get("error"))
+         return templates.TemplateResponse("auth_error.html", {"request": request, "result": result})
 
-#      logger.info(f"Session ID after login: {request.session.get('session_cookie')}")
-#      request.session["user"] = result.get("id_token_claims")
+     logger.info(f"Session ID after login: {request.session.get('session_cookie')}")
+     request.session["user"] = result.get("id_token_claims")
+     request.session["access_token"] = result.get("access_token")
+     #logger.info(f"User session: {request.session['user']}")
+     #request.session["session"] = result.get("access_token")  # Store access token in session
+     #logger.info(f"Access Token: {request.session['session']}")
+     
+     logger.info(f"Request Headers: {request.headers}")
 
-#      if cache.has_state_changed:
-#          msal_app.token_cache = cache
 
-#      return RedirectResponse(url=f"https://{request.url.hostname}/")  # Redirect to index page after login
-#  except Exception as e: # Handle exceptions
-#      logging.exception("Error in auth_response:" + str(e)) # Log the exception
-#      return templates.TemplateResponse("auth_error.html", {"request": request, "result": {"error": str(e)}}) # Show a general error
+     if cache.has_state_changed:
+         msal_app.token_cache = cache
 
-# # --- Logout Route ---
+     #return RedirectResponse(url=f"https://{request.url.hostname}/")  # Redirect to index page after login
+     return RedirectResponse(url="/")  # Redirect to backend page after login
+ except Exception as e: # Handle exceptions
+     logging.exception("Error in auth_response:" + str(e)) # Log the exception
+     return templates.TemplateResponse("auth_error.html", {"request": request, "result": {"error": str(e)}}) # Show a general error
 
-# @app.get("/logout")
-# async def logout(request: Request):
-#     request.session.pop("user", None)  # Clear user from session
-#     request.session.clear()  # Clear the session
-#     return RedirectResponse(url=f"https://{request.url.hostname}/login")
+# --- Logout Route ---
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.pop("user", None)  # Clear user from session
+    request.session.clear()  # Clear the session
+    #return RedirectResponse(url=f"https://{request.url.hostname}/login")
+    return RedirectResponse(url=f"/login")
 
 # Conversation History
 conversations = []
@@ -331,507 +364,7 @@ async def favicon():
     file_path = './static/' + file_name
     return FileResponse(path=file_path, headers={'mimetype': 'image/vnd.microsoft.icon'})
 
-@app.post("/create_gpt")
-async def create_gpt(request: Request, loggedUser: str = Cookie(None), gpt: str = Body(...), files: list[UploadFile] = File(...)):
-    try:
-        # Parse the JSON string into a dictionary
-        gpt = json.loads(gpt)
-        loggedUser = getUserName(request, "create_gpt")
 
-        if loggedUser != None and loggedUser != "N/A":
-            gpt["user"] = loggedUser
-            gpt["use_case_id"] = ""
-            # Now you can access gpt as a dictionary
-            gpt = GPTData(**gpt)  # Validate and create GPTData instance
-            #logger.info(f"Received GPT data: {gpt}")
-
-            if files != None and len(files) > 0:
-                for file in files:
-                    logger.info(f"Received files: {file.filename}")
-
-            gpt_id = await create_new_gpt(gpt)
-            logger.info(f"GPT created with ID: {gpt_id}")
-
-            file_upload_status = ""
-
-            if gpt.use_rag:
-                file_upload_status = await handle_upload_files(gpt_id, gpt, files)
-                logger.info(f"RAG Files uploaded successfully: {file_upload_status}")
-        
-            response = JSONResponse({"message": "GPT created successfully!", "gpt_id": gpt_id, "file_upload_status" : file_upload_status})
-        else:
-            response = JSONResponse({"error": "Unauthorized user"}, status_code=401)
-    except DuplicateKeyError as de:
-        logger.error(f"DuplicateKeyError while creating GPT: {de.error}")
-        response = JSONResponse({"error": "GPT name already exists."}, status_code=400)
-    except HTTPException as he:
-        logger.error(f"Error Code: {he}", exc_info=True)
-        response = JSONResponse({"error": he.detail}, status_code=500)
-
-    return response
-
-@app.get("/get_gpts")
-async def get_gpts(request: Request):
-    gpts = []
-    loggedUser = getUserName(request, "get_gpts")
-    #logger.info(f"User: {json.dumps(request.session.get('user'))}")
-
-    if loggedUser != None and loggedUser != "N/A":
-        gpts = await get_gpts_for_user(loggedUser)
-        for gpt in gpts:
-            gpt["_id"] = str(gpt["_id"]) # Convert ObjectId to string
-
-    return JSONResponse({"gpts": gpts}, status_code=200)
-
-@app.post("/chat/{gpt_id}/{gpt_name}")
-async def chat(request: Request, gpt_id: str, gpt_name: str, user_message: str = Form(...), params: str = Form(...), uploadedImage: UploadFile = File(...)):
-    if not user_message:
-        return JSONResponse({"error": "Missing 'user_message' in request body."}, status_code=400)
-    
-    try:
-        logger.info(f"Chat request received with GPT ID: {gpt_name} \n user message: {user_message} \n params: {params}")
-        gpt = await get_gpt_by_id(gpt_id)
-
-         # Parse the JSON string into a dictionary
-        model_configuration = json.loads(params)
-        model_configuration = ModelConfiguration(**model_configuration)  
-        #logger.info(f"Received GPT data: {gpt} Model Configuration: {model_configuration}")
-
-        if gpt is None:
-            return JSONResponse({"error": "GPT not found."}, status_code=404)
-        
-        streaming_response = False
-        response = await generate_response(streaming_response, user_message, model_configuration, gpt, uploadedImage)
-    except HTTPException as he:
-        logger.error(f"Error while getting response from Model. Details : \n {he.detail}", exc_info=True)
-        return JSONResponse({"error": f"Error while getting response from Model. Details : \n {he.detail}"}, status_code=500)
-
-    return JSONResponse({"response": response['model_response'], "total_tokens" : response['total_tokens'] if response['total_tokens'] else 0, "follow_up_questions": response['follow_up_questions'] }, status_code=200)
-
-@app.post("/chat/stream/{gpt_id}/{gpt_name}")
-async def chat(request: Request, gpt_id: str, gpt_name: str, user_message: str = Form(...), params: str = Form(...), uploadedImage: UploadFile = File(...)):
-    if not user_message:
-        return JSONResponse({"error": "Missing 'user_message' in request body."}, status_code=400)
-    
-    try:
-        logger.info(f"Chat request received with GPT ID: {gpt_name} \n user message: {user_message}\n params: {params}")
-        gpt = await get_gpt_by_id(gpt_id)
-
-         # Parse the JSON string into a dictionary
-        model_configuration = json.loads(params)
-        model_configuration = ModelConfiguration(**model_configuration)  
-        logger.info(f"Received GPT data: {gpt} \n Model Configuration: {model_configuration}")
-
-        if gpt is None:
-            return JSONResponse({"error": "GPT not found."}, status_code=404)
-        
-        streaming_response = True
-        return await generate_response(streaming_response, user_message, model_configuration, gpt, uploadedImage)
-    except HTTPException as he:
-        logger.error(f"Error while getting response from Model. Details : \n {he.detail}", exc_info=True)
-        return JSONResponse({"error": f"Error while getting response from Model. Details : \n {he.detail}"}, status_code=500)
-
-
-@app.put("/upload_document/{gpt_id}/{gpt_name}")
-async def upload_document_index(request: Request, gpt_id: str, gpt_name: str, files: list[UploadFile] = File(...)):
-    logger.info(f"Updating GPT with ID: {gpt_id} Name: {gpt_name}")
-    gpts_collection = await get_collection("gpts")
-    gpt: GPTData = await gpts_collection.find_one({"_id": ObjectId(gpt_id)})
-    logger.info(f"GPT Details: {gpt}")
-    try:
-        loggedUser = getUserName(request, "modify_gpt")
-        if loggedUser != None and loggedUser != "N/A":
-            if gpt is None:
-                raise ValueError("GPT object is None. Ensure it is properly initialized.")
-            # Parse the JSON string into a dictionary
-            # gpt = json.loads(gpt)
-            gpt["user"] = loggedUser
-            gpt["use_case_id"] = gpt.get("use_case_id", "") 
-            gpt["use_rag"] = True
-        
-            # Now you can access gpt as a dictionary
-            gpt = GPTData(**gpt)  # Validate and create GPTData instance
-            logger.info(f"Received GPT data: {gpt}")
-
-            if files != None and len(files) > 0:
-                for file in files:
-                    logger.info(f"Received files: {file.filename}")
-
-            # result = await update_gpt(gpt_id, gpt_name, gpt)
-            logger.info(f"GPT : {gpt.name}, use_rag: {bool(gpt.use_rag)}")
-
-            file_upload_status = ""
-
-            if gpt.use_rag:
-                file_upload_status = await handle_upload_files(gpt_id, gpt, files)
-                logger.info(f"RAG Files uploaded successfully: {file_upload_status}")
-                response = JSONResponse({"message": "Document Uploaded Successfully!", "gpt_name": gpt_name, "file_upload_status" : file_upload_status}, status_code=200)
-                
-            # if result.modified_count == 1:
-            #     response = JSONResponse({"message": "GPT created successfully!", "gpt_name": gpt_name, "file_upload_status" : file_upload_status}, status_code=200)
-            # elif result.modified_count == 0:
-            #     response = JSONResponse({"message": "No Changes in the updated GPT!", "gpt_name": gpt_name, "file_upload_status" : file_upload_status}, status_code=200)
-            else:
-                response = JSONResponse({"error": "GPT not found"}, status_code=404)
-        else:
-            response = JSONResponse({"error": "Unauthorized user"}, status_code=401)
-    except Exception as e:
-        logger.error(f"Error occurred while updating GPT: {e}", exc_info=True)
-        response = JSONResponse({"error": f"Error Code: {e}"}, status_code=500)
-
-    return response
-
-@app.post("/update_instruction/{gpt_id}/{gpt_name}/{usecase_id}")
-async def update_instruction(request: Request, gpt_id: str, gpt_name: str, usecase_id: str):
-    logger.info(f"Updating instruction for GPT with ID: {gpt_id} Name: {gpt_name} Usecase : {usecase_id}")
-
-    try:
-        loggedUser = getUserName(request, "update_instruction")
-        if loggedUser != None and loggedUser != "N/A":
-            result = await update_gpt_instruction(gpt_id, gpt_name, usecase_id, loggedUser)
-            logger.info(f"Instruction updated for GPT: {gpt_name}, result: {result}")
-
-            if result.modified_count == 1:
-                response = JSONResponse({"message": "Instruction updated successfully!", "gpt_name": gpt_name}, status_code=200)
-            elif result.modified_count == 0:
-                response = JSONResponse({"message": "No Changes in the instruction!", "gpt_name": gpt_name}, status_code=200)
-            else:
-                response = JSONResponse({"error": "GPT not found"}, status_code=404)
-        else:
-            response = JSONResponse({"error": "Unauthorized user"}, status_code=401)
-    except Exception as e:
-        logger.error(f"Error occurred while updating instruction: {e}", exc_info=True)
-        response = JSONResponse({"error": f"Error Code: {e}"}, status_code=500)
-
-    return response
-
-@app.put("/update_gpt/{gpt_id}/{gpt_name}")
-async def modify_gpt(request: Request, gpt_id: str, gpt_name: str, gpt: str = Body(...), files: list[UploadFile] = File(...)):
-    logger.info(f"Updating GPT with ID: {gpt_id} Name: {gpt_name}")
-
-    try:
-        loggedUser = getUserName(request, "modify_gpt")
-        if loggedUser != None and loggedUser != "N/A":
-            # Parse the JSON string into a dictionary
-            gpt = json.loads(gpt)
-            gpt["user"] = loggedUser
-            gpt["use_case_id"] = gpt.get("use_case_id", "") 
-        
-            # Now you can access gpt as a dictionary
-            gpt = GPTData(**gpt)  # Validate and create GPTData instance
-            logger.info(f"Received GPT data: {gpt}")
-
-            if files != None and len(files) > 0:
-                for file in files:
-                    logger.info(f"Received files: {file.filename}")
-
-            result = await update_gpt(gpt_id, gpt_name, gpt)
-            logger.info(f"GPT : {gpt.name}, result: {result}, use_rag: {bool(gpt.use_rag)}")
-
-            file_upload_status = ""
-
-            if gpt.use_rag:
-                file_upload_status = await handle_upload_files(gpt_id, gpt, files)
-                logger.info(f"RAG Files uploaded successfully: {file_upload_status}")
-                
-            if result.modified_count == 1:
-                response = JSONResponse({"message": "GPT created successfully!", "gpt_name": gpt_name, "file_upload_status" : file_upload_status}, status_code=200)
-            elif result.modified_count == 0:
-                response = JSONResponse({"message": "No Changes in the updated GPT!", "gpt_name": gpt_name, "file_upload_status" : file_upload_status}, status_code=200)
-            else:
-                response = JSONResponse({"error": "GPT not found"}, status_code=404)
-        else:
-            response = JSONResponse({"error": "Unauthorized user"}, status_code=401)
-    except Exception as e:
-        logger.error(f"Error occurred while updating GPT: {e}", exc_info=True)
-        response = JSONResponse({"error": f"Error Code: {e}"}, status_code=500)
-
-    return response
-    
-@app.delete("/delete_gpt/{gpt_id}/{gpt_name}")
-async def remove_gpt(gpt_id: str, gpt_name: str):
-    logger.info(f"Deleting GPT: {gpt_id} Name: {gpt_name}")
-
-    # Delete the GPT
-    gpt_delete_result = await delete_gpt(gpt_id, gpt_name)
-
-    if gpt_delete_result.deleted_count == 1:
-        response = JSONResponse({"message": "GPT and Chat history removed successfully.!"})
-    else:
-        response = JSONResponse({"error": "GPT not found"}, status_code=404)
-
-    return response
-
-@app.delete("/delete_all_gpts")
-async def delete_all_gpts(request: Request):
-    loggedUser = getUserName(request, "delete_all_gpts")
-    if loggedUser != None and loggedUser != "N/A":
-        result = await delete_gpts(loggedUser)  # Delete all documents in the collection
-        if result.deleted_count > 0:
-            response = JSONResponse({"message": "All GPTs deleted successfully!"})
-        else:
-            response = JSONResponse({"error": "No GPTs found"}, status_code=404)
-    else:
-        response = JSONResponse({"error": "Unauthorized user"}, status_code=401)
-    
-    return response
-    
-@app.get("/chat_history/{gpt_id}/{gpt_name}")
-async def get_chat_history(gpt_id: str, gpt_name: str):
-    logger.info(f"Fetching chat history for GPT: {gpt_id} Name: {gpt_name}")
-
-    chat_history = await fetch_chat_history(gpt_id, gpt_name, max_tokens_in_conversation)  # Fetch chat history from MongoDB
-    #logger.info(f"Chat history {chat_history}")
-
-    # After saving the image, read its contents and encode the image as base64
-    # The image URL will be saved in the chat. Use the URL to pick the image from the server
-    for chat in chat_history:
-        if "chatimages" in chat["content"]:
-            uploads_directory = os.path.dirname(__file__)
-            imagePath = os.path.join(uploads_directory, chat["content"])
-            logger.info(f"Image URL found in chat history {imagePath}")
-            #chat["content"] = imagePath
-
-    if chat_history is None or chat_history == []:
-        response = JSONResponse({"error": "No Chats in the GPT"}, status_code=404)
-    else:
-        #reverse the list for linear view or to see proper conversation flow
-        response = JSONResponse({"chat_history": chat_history[::-1], "token_count": len(chat_history)}, status_code=200) 
-
-    return response
-
-@app.get("/chat_history/{gpt_id}/{gpt_name}/{use_case_id}")
-async def get_chat_history_for_use_case(gpt_id: str, gpt_name: str, use_case_id: str = "all"):
-    logger.info(f"Fetching chat history for GPT: {gpt_id} Name: {gpt_name}")
-
-    if use_case_id == "all":
-        chat_history = await fetch_chat_history(gpt_id, gpt_name, max_tokens_in_conversation)
-    else:
-        chat_history = await fetch_chat_history_for_use_case(use_case_id, gpt_id, gpt_name, max_tokens_in_conversation)  # Fetch chat history from MongoDB
-    logger.info(f"Chat history {chat_history}")
-
-    # After saving the image, read its contents and encode the image as base64
-    # The image URL will be saved in the chat. Use the URL to pick the image from the server
-    for chat in chat_history:
-        if "chatimages" in chat["content"]:
-            uploads_directory = os.path.dirname(__file__)
-            imagePath = os.path.join(uploads_directory, chat["content"])
-            logger.info(f"Image URL found in chat history {imagePath}")
-            #chat["content"] = imagePath
-
-    if chat_history is None or chat_history == []:
-        response = JSONResponse({"error": "No Chats in the GPT"}, status_code=404)
-    else:
-        #reverse the list for linear view or to see proper conversation flow
-        response = JSONResponse({"chat_history": chat_history[::-1], "token_count": len(chat_history)}, status_code=200) 
-
-    return response
-
-@app.put("/clear_chat_history/{gpt_id}/{gpt_name}")
-async def clear_chat_history(gpt_id: str, gpt_name: str):
-    logger.info(f"Clearing chat history for GPT: {gpt_id} Name: {gpt_name}")
-
-    result = await delete_chat_history(gpt_id, gpt_name)  # Delete all documents in the collection
-
-    logger.info(f"Modified count: {result.modified_count}")
-    
-    if result.modified_count > 0:
-        response = JSONResponse({"message": "Cleared conversations successfully!"})
-    else:
-        response = JSONResponse({"error": "No messages found in GPT"}, status_code=404)
-    
-    return response
-    
-@app.get("/usecases/{gpt_id}")
-async def fetch_usecases(gpt_id: str):
-    try:
-        result = await get_usecases(gpt_id)
-        logger.info(f"Use cases fetched successfully: {len(result)}")
-        response = JSONResponse({"message": "SUCCESS", "usecases": result}, status_code=200)
-    except Exception as e:
-        logger.error(f"Error occurred while fetching usecases: {e}", exc_info=True)
-        response = JSONResponse({"error": f"Error occurred while fetching usecases: {e}"}, status_code=500)
-    
-    return response
-
-@app.get("/get_prompts/{gpt_id}/{usecase}/{user}")
-async def get_prompts_for_usecase(gpt_id: str, usecase: str, user: str):
-    """
-    Fetch the use case by ID and return the 'prompt' field.
-    """
-    try:
-        # Fetch the use case details for the given GPT ID and use case ID
-        prompts_default = await get_prompts(gpt_id, usecase, "Default")
-        logger.info(f"Prompts Default: {prompts_default}")
-        prompts = await get_prompts(gpt_id, usecase, user)
-        # Merge prompts_default and prompts, avoiding duplicates by 'key'
-        if prompts_default and prompts:
-            existing_keys = {p.get("key") for p in prompts}
-            merged_prompts = prompts.copy()
-            for p in prompts_default:
-                if p.get("key") not in existing_keys:
-                    merged_prompts.append(p)
-            prompts = merged_prompts
-        elif prompts_default:
-            prompts = prompts_default
-        #logger.info(f"Prompts fetched successfully: {len(prompts)}")
-        logger.info(f"Prompts: {prompts}")
-
-        if not usecase:
-            return JSONResponse({"error": "Use case not found"}, status_code=404)
-
-        # Extract the 'prompt' field from the use case
-        
-
-        return JSONResponse({"prompts": prompts}, status_code=200)
-    except Exception as e:
-        logger.error(f"Error occurred while fetching prompts: {e}", exc_info=True)
-        return JSONResponse({"error": f"Error occurred while fetching prompts: {e}"}, status_code=500)
-
-@app.post("/update_prompt/{gpt_id}/{usecase}/{user}/{refinedPrompt}")
-async def update_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, refinedPrompt: str):
-    try:
-
-        if not all([gpt_id, usecase, user, refinedPrompt]):
-            return JSONResponse({"success": False, "error": "Missing required fields"}, status_code=400)
-
-        result = await update_prompt(gpt_id, usecase, user, refinedPrompt)
-        logger.info(f"Prompt updated successfully: {result}")
-        return JSONResponse({"success": True}, status_code=200)
-        
-
-    except Exception as e:
-        logger.error(f"Error in update_prompt_for_usecase: {e}", exc_info=True)
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-@app.delete("/delete_prompt/{gpt_id}/{usecase}/{user}/{key}")
-async def delete_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, key: str):
-    try:
-        if not all([gpt_id, usecase, user, key]):
-            return JSONResponse({"success": False, "error": "Missing required fields"}, status_code=400)
-
-        result = await delete_prompt(gpt_id, usecase, user, key)
-        logger.info(f"Prompt deleted successfully: {result}")
-        return JSONResponse({"success": True}, status_code=200)
-
-    except Exception as e:
-        logger.error(f"Error in delete_prompt_for_usecase: {e}", exc_info=True)
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-@app.get("/logs")
-async def get_logs():
-    """Fetch the contents of the app.log file."""
-    log_file_path = "logs/app.log" # Update with your actual log file path
-
-    if not os.path.exists(log_file_path):
-        raise HTTPException(status_code=404, detail="Log file not found")
-
-    with open(log_file_path, "r") as f:
-        log_content = f.read()
-
-    logger.info(log_filename)  
-
-    return {"log_content": log_content}
-
-
-@app.get("/deployedModels")
-async def getDeployedModelsFromAzure():
-    """Fetch the open ai models deployed in azure open ai portal."""
-    try:
-        deployments = getDeployments2()
-        logger.info(f"Deployments fetched successfully: {len(deployments)}")
-        if deployments is None:
-            response = JSONResponse({"message": "No deployments found"}, status_code=200)
-        else:
-            response = JSONResponse({"message": "SUCCESS", "model_deployments": deployments}, status_code=200)
-    except Exception as e:
-        logger.error(f"Error occurred while fetching deployments: {e}", exc_info=True)
-        response = JSONResponse({"error": f"Error occurred while fetching deployments: {e}"}, status_code=500)
-    return response
-
-@app.post("/refinePrompt/{gpt_id}/{usecase}/{user}")
-async def refinePrompt(
-    request: Request,
-    gpt_id: str,
-    usecase: str,
-    user: str,
-    body: InputPrompt = Body(...)
-):
-    """Refine the prompt based on the user query."""
-    validator = PromptValidator()
-    response: str = ""
-    system_prompt: str = None
-
-    try:
-        input_prompt = body.prompt
-        logger.info(f"Input prompt (Original) : {input_prompt} Length : {len(input_prompt)}")
-
-        if gpt_id is not None:
-            gpt_data: GPTData = await get_gpt_by_id(gpt_id)
-            system_prompt = gpt_data["instructions"]
-
-        # Process prompt
-        response = await validator.process_prompt_optimized(input_prompt, system_prompt)
-        refinedPrompt = response.refined_prompt
-        logger.info(f"Refined prompt : {refinedPrompt} Length : {len(refinedPrompt)}")
-        update_response = await update_prompt(gpt_id, usecase, user, refinedPrompt)
-        logger.info(f"Prompt updated: {update_response}")
-
-        return JSONResponse({"refined_prompt": response.dict() if hasattr(response, "dict") else response.__dict__}, status_code=200)
-    except Exception as e:
-        logger.error(f"Error occurred while refining prompt: {e}", exc_info=True)
-        return JSONResponse({"refined_prompt": input_prompt}, status_code=200)
-
-@app.get("/get_image/{imagePath}",
-
-    # Set what the media type will be in the autogenerated OpenAPI specification.
-    # fastapi.tiangolo.com/advanced/additional-responses/#additional-media-types-for-the-main-response
-    responses = {
-        200: {
-            "content": {"image/jpeg": {}}
-        }
-    },
-
-    # Prevent FastAPI from adding "application/json" as an additional
-    # response media type in the autogenerated OpenAPI specification.
-    # https://github.com/tiangolo/fastapi/issues/3258
-    response_class=StreamingResponse
-)
-async def get_image(imagePath: str):
-    try:
-        logger.info("Image path : " + imagePath)
-        
-        image_path = urllib.parse.unquote(imagePath)
-        image_path = Path(imagePath)
-
-        if not image_path.is_file():
-            logger.info(f"Image not found in path: {imagePath}")
-            return JSONResponse({"error": "Image not found on the server"}, status_code=404)
-        
-        logger.info(f"Fetching image from path: {imagePath}")
-
-        fullPath = os.path.join(os.path.dirname(__file__), image_path)
-        logger.info(f"Full path of image : {fullPath}")
-
-        with open(fullPath, "rb") as img_file:
-            logger.info("Reading image bytes")
-            image_bytes = img_file.read()
-            logger.info(f"Length of image : {len(image_bytes)}")
-
-            # Convert bytes to base64 string
-            base64_string = base64.b64encode(image_bytes).decode('utf-8')
-            
-            # Create the data URI
-            data_uri = f"data:image/jpeg;base64,{base64_string}"
-
-            # media_type here sets the media type of the actual response sent to the client.
-            #return StreamingResponse(io.BytesIO(image_bytes), media_type="image/jpeg")
-            response = JSONResponse(content={"image": data_uri}, status_code=200)
-    except Exception as e:
-        logger.error(f"Error occurred while fetching image: {e}", exc_info=True)
-        response = JSONResponse({"error": f"Error occurred while fetching image: {e}"}, status_code=500)
-    
-    return response
     
 # @app.get("/userProfile")
 # async def getUserProfile(request: Request):
@@ -900,44 +433,7 @@ def getDeployments():
 #         logger.error("Failed to acquire access token.")
 #         raise Exception("Authentication failed: " + result.get("error_description", "Unknown error"))
 
-def getDeployments2():
-    deployed_model_names = []
 
-    # Replace with your subscription ID, client ID, client secret, and tenant ID
-    subscription_id = os.getenv("SUBSCRIPTION_ID")
-    resource_group = os.getenv("RESOURCE_GROUP_NAME")
-    openai_account = os.getenv("OPENAI_ACCOUNT_NAME")
-    
-    # Your MSAL app credentials (Client ID, Client Secret, Tenant ID)
-    client_id = os.getenv("CLIENT_ID")
-    client_secret = os.getenv("CLIENT_SECRET_VALUE")
-    tenant_id = os.getenv("TENANT_ID")
-    
-    try:
-        # Use the token with Azure SDK's client
-        credential = ClientSecretCredential(tenant_id, client_id, client_secret)
-        
-        # Create Cognitive Services management client with the token
-        client = CognitiveServicesManagementClient(credential, subscription_id)
-        
-        logger.info("Starting to fetch deployments...")
-
-        # Get all deployments in the subscription
-        deployments = client.deployments.list(resource_group_name=resource_group, account_name=openai_account)
-
-        if not deployments:
-            logger.warning("No deployments found.")
-        else:
-            for deployment in deployments:
-                logger.info(f"Deployment Name: {deployment.name}")
-                deployed_model_names.append(deployment.name)
-
-    except AzureError as e:
-        logger.error(f"AzureError occurred: {str(e)}")
-    except Exception as e:
-        logger.error(f"Unexpected error occurred: {str(e)}")
-
-    return deployed_model_names
 
 # def print_session_values(request: Request, callee: str):
 #     session = request.session
@@ -958,22 +454,8 @@ def getDeployments2():
 #         for key, value in session.items():
 #             logger.info(f"{key}: {value}\n")
 
-def getUserName(request: Request, callee: str):
-    # loggedUser = "N/A"
-    # user = getSessionUser(request)
 
-    # if user is None:
-    #     loggedUser = request.cookies.get("loggedUser")
-    #     logger.info("Fetch => loggedUser from cookie")
-    # else:
-    #     loggedUser = user["name"]
-    #     logger.info("Fetch => loggedUser from session")
 
-    # logger.info(f"Calling Method : {callee} User: {loggedUser}") 
-    # return loggedUser if loggedUser else "N/A" 
-    # return loggedUser if loggedUser else "Dharmeshwaran S" 
-    return "Dharmeshwaran S"
-    
 # if __name__ == "__main__":
 #    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 
