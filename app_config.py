@@ -1,5 +1,10 @@
 import os
+from dotenv import load_dotenv
 from azure.storage.blob import BlobServiceClient
+
+load_dotenv()  # Load environment variables from .env file
+
+APP_SCOPE = os.getenv("APP_SCOPE")
 AUTHORITY= os.getenv("AUTHORITY")
 
 # Application (client) ID of app registration

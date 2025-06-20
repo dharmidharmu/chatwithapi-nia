@@ -17,7 +17,7 @@ from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ClientSecretCredential
 from azure.core.exceptions import AzureError
 
-from app_config import CLIENT_ID
+from app_config import CLIENT_ID, APP_SCOPE
 from auth_msal import verify_jwt_token
 from gpt_utils import create_folders
 from azure_openai_utils import call_maf
@@ -117,7 +117,7 @@ app = FastAPI(
     swagger_ui_init_oauth={
         'usePkceWithAuthorizationCodeGrant': True,
         'clientId': CLIENT_ID,
-        'scopes': 'api://nia-local-app/access_as_user',
+        'scopes': 'api://' + APP_SCOPE + '/access_as_user',
     },
     middleware=middleware, 
     trusted_hosts=["customgptapp.azurewebsites.net"]
