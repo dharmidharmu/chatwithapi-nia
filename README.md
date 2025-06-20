@@ -31,3 +31,13 @@ ChatWithAPI-Nia is an application that integrates multiple cloud services and AP
    ```bash
    git clone https://github.com/<your-username>/chatwithapi-nia.git
    cd chatwithapi-nia
+2. **Install Dependencies:**
+
+   pip install --update -r requirements.txt
+
+**Deployment**
+Before deploying to Azure or any other cloud provider, verify that your configuration settings in the .env file (such as RESOURCE_GROUP_NAME, SUBSCRIPTION_ID, and API keys) are correct. Follow deployment best practices for your target environment.
+
+For deployments to Azure App Service, consult the Azure Web App documentation and ensure that all connection strings and environment variables are securely managed in the Azure Portal.
+
+Contributing
