@@ -135,3 +135,13 @@ Make Changes: Modify, add, or delete files in your project directory.
 27. rebase code
      git rebase main (or)
      git pull --rebase
+
+28. If you have committed, but not pushed to repository. But want to revert the commit use this 
+git reset HEAD~ (It will bring back all the committed files back as uncommitted changes)
+
+Here is the order (or you can simply use the UI)
+====================================================
+git reset HEAD~         # Undo the last commit (but keep changes staged)
+git restore --staged abc.py   # Unstage abc.py
+git rm --cached abc.py        # Remove from Git but keep it locally (optional)
+git commit -m "Removed abc.py from commit"

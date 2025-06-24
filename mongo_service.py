@@ -11,7 +11,7 @@ from data.GPTData import GPTData
 from data.MessageData import Message
 from data.Usecase import Usecase
 from mongo_client import get_mongo_db
-from role_mapping import SYSTEM_SAFETY_MESSAGE
+from role_mapping import NIA_OFFICIAL_MAIL, NIA_SYSTEM_PROMPT, SYSTEM_SAFETY_MESSAGE, USE_CASES_LIST
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +156,25 @@ async def update_gpt_instruction(gpt_id: str, gpt_name: str, usecase_id: str, lo
         # get the gpt 
         gpt: GPTData = gpts_collection.find_one({"_id": ObjectId(gpt_id)})
         if gpt is not None:
+            FORMATTED_NIA_SYSTEM_MESSAGE = NIA_SYSTEM_PROMPT.format(
+                current_date_time=str(date.datetime.now().isoformat()),
+                current_model_name=gpt_name,
+                usecases=USE_CASES_LIST,
+                contact_nia=NIA_OFFICIAL_MAIL,
+                safety_messages=SYSTEM_SAFETY_MESSAGE,
+                usecase_name=useCase["name"],
+                usecase_instructions=useCase["instructions"]
+            )
+
             # Update the instruction in the GPT collection
             result: UpdateResult = await gpts_collection.update_one(
                 {"_id": ObjectId(gpt_id)},
-                {"$set": {"instructions": useCase["name"] +"@@@@@\n"+ useCase["instructions"] + "\n" + SYSTEM_SAFETY_MESSAGE, 
-                          "user": loggedUser, 
-                          "use_case_id": usecase_id}}
+                {"$set": {
+                    "instructions": FORMATTED_NIA_SYSTEM_MESSAGE + "@@@@@" + useCase["name"], 
+                     "user": loggedUser, 
+                     "use_case_id": usecase_id
+                    }
+                }
             )
 
             # Update in messages table as well to maintain consistency
@@ -233,7 +246,7 @@ async def fetch_chat_history_for_use_case(use_case_id: str, gpt_id: str, gpt_nam
     chat_history = []
     
     chat_history = await messages_collection.find({"gpt_id": ObjectId(gpt_id), "role" : {"$ne": "system"}, "hiddenFlag" : False, "use_case_id" : use_case_id}).sort("created_at", DESCENDING).limit(limit).to_list(None) #only the last 10 conversations are picked. Since we are using the same call for adding to the conversations we have the same answer repeating problem
-    logger.info(f"Chat History {chat_history}")
+    #logger.info(f"Chat History {chat_history}")
     if chat_history is not None:
         chat_history = list(chat_history)
 

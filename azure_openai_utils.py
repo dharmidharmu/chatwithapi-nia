@@ -2,9 +2,7 @@ import os
 import base64
 import logging
 import json
-import re
 from fastapi.responses import StreamingResponse
-import requests
 import datetime
 import tiktoken
 
@@ -214,7 +212,7 @@ async def get_completion_from_messages_standard(gpt: GPTData, model_configuratio
     try:
         # Get Azure Open AI Client and fetch response
         client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
-        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
+        model_configuration: ModelConfiguration = await construct_model_configuration(model_configuration)
         extra_body = {}
         
         if gpt["use_rag"] == True:
@@ -311,7 +309,7 @@ async def get_completion_from_messages_stream(gpt: GPTData, model_configuration,
     try:
         # Get Azure Open AI Client and fetch response
         client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, True)
-        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
+        model_configuration: ModelConfiguration = await construct_model_configuration(model_configuration)
         extra_body = {}
 
         if gpt["use_rag"] == True:
@@ -419,7 +417,7 @@ async def get_completion_from_messages_default(model_name: str, use_rag: bool, m
 
     # Get Azure Open AI Client and fetch response
     client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
-    model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
+    model_configuration: ModelConfiguration = await construct_model_configuration(model_configuration)
 
     try:
         response = await client.chat.completions.create(
@@ -453,7 +451,7 @@ async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration
     #client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version, False)
     try:
         client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
-        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
+        model_configuration: ModelConfiguration = await construct_model_configuration(model_configuration)
 
         try:
             response = await client.chat.completions.create(
@@ -535,7 +533,7 @@ async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, 
     #client = getAzureOpenAIClient(gpt4o_endpoint, gpt4o_api_key, gpt4o_api_version, True)
     try:
         client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, True)
-        model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
+        model_configuration: ModelConfiguration = await construct_model_configuration(model_configuration)
 
         try:
             full_response_content = ""
@@ -631,18 +629,29 @@ async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, 
         return StreamingResponse(iter([str(e)]), media_type="text/event-stream")
     
 async def preprocessForRAG(user_message: str, image_response:str, use_case:str, gpt: GPTData, conversations: list, model_configuration: ModelConfiguration):
-    
+
+    logger.info(f"USE_CASE : {use_case}")
+    USER_PROMPT = USE_CASE_CONFIG[use_case]["user_message"]
+    #logger.info(f"USE_CASE_CONFIG[{use_case}]: {USER_PROMPT}")
+
     context_information, additional_context_information, conversations = await determineFunctionCalling(user_message, image_response, use_case, gpt, conversations, model_configuration)
 
-    # Step 4: Append the current user query with additional context into the conversation. 
-    # This additional context is only to generate the response from the model and won't be saved in the conversation history for aesthetic reasons.
-    if context_information is not None and context_information != "" and len(context_information) > 0:
-        USER_PROMPT = USE_CASE_CONFIG[use_case]["user_message"]
-        logger.info(f"USE_CASE_CONFIG[use_case]: {USER_PROMPT}")
+    # Step 4: Append the current user query with additional context into the conversation. This additional context is only to generate the response from the model and won't be saved in the conversation history for aesthetic reasons.
+    if use_case == "CREATE_PRODUCT_DESCRIPTION":
         conversations.append({
                                 "role": "user",
                                 "content" : USER_PROMPT.format(
-                                                query=user_message, sources=context_information, additional_sources=additional_context_information) + FORMAT_RESPONSE_AS_MARKDOWN
+                                                query=user_message, 
+                                                sources=image_response, 
+                                                additional_sources=[]) + FORMAT_RESPONSE_AS_MARKDOWN
+                            })
+    elif context_information is not None and context_information != "" and len(context_information) > 0:
+        conversations.append({
+                                "role": "user",
+                                "content" : USER_PROMPT.format(
+                                                query=user_message, 
+                                                sources=context_information, 
+                                                additional_sources=additional_context_information) + FORMAT_RESPONSE_AS_MARKDOWN
                             })
     else:
         conversations.append({"role": "user", "content": user_message})
@@ -737,31 +746,28 @@ async def processResponse(response):
     return main_response, follow_up_questions, total_tokens
 
 async def generate_response(streaming_response: bool, user_message: str, model_configuration: ModelConfiguration, gpt: GPTData, uploadedFile: UploadFile = None):
-
-    instruction_data = gpt["instructions"].split("@@@@@")
-    # ALLOWED_IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg')
     has_image = False
-    use_case = instruction_data[0]
     previous_conversations_count = 6
     proceed = False
     model_name = gpt["name"]
     use_rag = bool(gpt["use_rag"])
+    image_response = ""
+    DEFAULT_IMAGE_RESPONSE = ""
+
+    # Step 1 : Get the use case, role information, model configuration parameters
+    use_case = await get_use_case(gpt)
     role_information, model_configuration = await get_role_information(use_case) if use_rag else ("AI Assistant", model_configuration)
-    model_configuration = ModelConfiguration(**model_configuration)
+    model_configuration: ModelConfiguration = await construct_model_configuration(model_configuration)
 
-    # if gpt["name"] == "ecommerce-rag-demo":
-    #     context_information = await get_data_from_azure_search(user_message, use_case)
-
-    # Step 1 : Get last conversation history 
-    #chat_history = await fetch_chat_history(gpt["_id"], model_name, limit=-1) # We need entire conversation history to be passed to the model
-    chat_history = await fetch_chat_history(gpt["_id"], model_name, limit=6)
+    # Step 2 : Get last conversation history (6 messages) for the given gpt_id and model_name
+    chat_history = await fetch_chat_history(gpt["_id"], model_name, limit=6) # use limit=-1 if needing the entire conversation history to be passed to the model
     
     # Step 3: Format the conversation to support OpenAI format (System Message, User Message, Assistant Message)
     conversations = [{"role": "system", "content": gpt["instructions"]}]
     for msg in chat_history:
         conversations.append({"role": msg["role"], "content": msg["content"]})
 
-    # Construct the token request
+    # Step 4: get token count for the conversation 
     token_data = await get_token_count(model_name, gpt["instructions"],  conversations, user_message, int(model_configuration.max_tokens))
     logger.info(f"Token Calculation : stage 1 {token_data}")
     
@@ -777,22 +783,20 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
         "user": gpt["user"],
         "use_case_id": gpt["use_case_id"]
     })
-        
     
     #has_image = (uploadedFile is not None and uploadedFile.filename != "blob" and uploadedFile.filename != "dummy")
     file_extension = os.path.splitext(uploadedFile.filename)[1].lower()
-    if use_rag and file_extension in ALLOWED_IMAGE_EXTENSIONS:
+    if file_extension in ALLOWED_IMAGE_EXTENSIONS:
         has_image = True
     
     if file_extension in [".pdf"]:
         use_rag = True
         await handle_upload_files(gpt["_id"], gpt, [uploadedFile])
-    DEFAULT_IMAGE_RESPONSE = ""
 
-    logger.info(f"use_rag is {use_rag}and has_image is {has_image}")
-    
-    # Step 6: Handle images/attachments if any or the user query
+    logger.info(f"use_rag is {use_rag} and has_image is {has_image}")
     logger.info(f"Uploaded File {uploadedFile}")
+
+    # Step 6: Handle images/attachments if any or the user query
     if not use_rag and has_image:
         logger.info("CASE 1 : No RAG but Image is present")
         proceed = False
@@ -800,18 +804,52 @@ async def generate_response(streaming_response: bool, user_message: str, model_c
     elif use_rag and has_image:
         logger.info("CASE 2 : RAG and Image is present")
         proceed = True
-        #Step 1 : Process the image (Always keep the stream flag as False when processing the image with RAG. Because we need 
-        # full information of the image for the function calling to take a decision. Streaming will cause problems)
+        
+        # Step 1 : Process the image (Always keep the stream flag as False when processing the image with RAG. Because we need full information of the image for the function calling to take a decision. Streaming will cause problems)
         conversation_for_image_analysis = []
-        conversation_for_image_analysis.append({"role":"system", "content": "You are helpful AI Assistant who can analyze the given image and return the description in maximum 100 words as response."})
+
+        # Create a specialized image analysis system message
+        conversation_for_image_analysis.append({
+            "role": "system", 
+            "content": "You are an intelligent image analysis assistant specialized in e-commerce and structured document interpretation. You must dynamically adjust your inference based on image type. Every output should include TWO clear sections: \n\n"
+                "1. INFERENCE (Max 50 words):\n"
+                "   - Summarize what the image represents (product, handwritten note, invoice, etc.)\n"
+                "   - If a brand is visible, infer its identity and associated value (e.g., premium, sustainable)\n"
+                "   - If image is blurry or unclear, specify whether entire image or specific parts are unreadable\n"
+                "   - If the image is irrelevant (e.g., scenery, selfies), inform the user and suggest supported types: e-commerce product images, handwritten notes, invoices, documents with layout, or OCR text snippets\n\n"
+                "2. DETAILS (Structured Breakdown):\n"
+                "   - Dynamically apply **layout-aware extraction ONLY IF** the image contains: handwritten text, OCR-type images, or documents with structure (tables, sections)\n"
+                "       - Capture headers, sections, tables, labels, signatures, stamps, totals, etc.\n"
+                "       - Translate non-English handwritten or printed text into English\n"
+                "   - For product-only images:\n"
+                "       - Extract product brand, name, SKU/model, visible features, specifications, pricing, and packaging cues\n"
+                "   - For all image types:\n"
+                "       - Include any readable text\n"
+                "       - Mention any key visual attributes (color, texture, layout, orientation)\n"
+                "       - Note any missing/obscured/blurred areas or artifacts affecting quality\n\n"
+                "BOUNDARY CONDITIONS:\n"
+                "- If the image is entirely unreadable or corrupted, clearly mention this and ask the user to re-upload a higher-quality image.\n"
+                "- If the image is not among supported types, respond:\n"
+                "    'The image appears unrelated to the supported types. Please upload one of the following:\n"
+                "     (a) Product images (e.g., electronics, fashion items),\n"
+                "     (b) OCR text snapshots (printed or digital),\n"
+                "     (c) Handwritten notes,\n"
+                "     (d) Documents with layout structure such as invoices, forms, or receipts.'\n\n"
+                "FORMATTING:\n"
+                "- Always present output in two sections labeled: INFERENCE and DETAILS\n"
+                "- Use bullet points in DETAILS for clarity\n"
+                "- Remain factual, structured, and avoid assumptions unless strongly implied by visual context\n"
+                "- Respond professionally and helpfully in every case"
+        })
+        
         image_response = await processImage(False, False, user_message, model_configuration, gpt, conversation_for_image_analysis, uploadedFile)
         conversation_for_image_analysis.clear()
 
-        #Step 2 : Function Calling
-        if image_response is not None:
-            conversations.append({"role": "user", "content": user_message})
-            conversations.append({"role": "assistant", "content": "Image Analysis Result : " + image_response.get("model_response")})
-            await preprocessForRAG(user_message, image_response, use_case, gpt, conversations, model_configuration)
+        # Step 2 : Function Calling
+        if image_response is not None and image_response.get("model_response") is not None and image_response.get("model_response") != "":
+            #conversations.append({"role": "user", "content": user_message})
+            #conversations.append({"role": "assistant", "content": "Image Analysis Result : " + image_response.get("model_response")})
+            await preprocessForRAG(user_message, image_response.get("model_response"), use_case, gpt, conversations, model_configuration)
     elif use_rag and not has_image:
         logger.info("CASE 3 : RAG and No Image")
         proceed = True
@@ -1066,7 +1104,7 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
 
     # Initial user message
     function_calling_conversations.append({"role": "system", "content":FUNCTION_CALLING_SYSTEM_MESSAGE}) # Single function call
-    function_calling_conversations.append({"role": "user", "content": FUNCTION_CALLING_USER_MESSAGE.format(query=search_query,use_case=use_case, conversation_history=conversations,image_details=image_response)}) # Single function call
+    function_calling_conversations.append({"role": "user", "content": FUNCTION_CALLING_USER_MESSAGE.format(query=search_query, use_case=use_case, conversation_history=conversations, image_details=image_response)}) # Single function call
     #messages = [{"role": "user", "content": "What's the current time in San Francisco, Tokyo, and Paris?"}] # Parallel function call with a single tool/function defined
 
     # Define the function for the model
@@ -1159,63 +1197,31 @@ async def determineFunctionCalling(search_query: str, image_response: str, use_c
 
     return data, additional_data, conversations
 
-# def get_azure_openai_deployments():
-#     logger.info("Getting deployments from Azure OpenAI")
-#     base_url = "https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.CognitiveServices/accounts/{accountName}/deployments?api-version=2023-05-01"
-#     url = base_url.format(subscriptionId=subscription_id, resourceGroupName=resource_group_name, accountName=openai_account_name)
-    
-#     # Send request
-#     try:
-#         response = requests.get(url, headers=headers)
-#     except requests.RequestException as e:
-#         raise SystemExit(f"Failed to make the request. Error: {e}")
-
-#     # Handle the response as needed (e.g., print or process)
-#     logger.info(response.json())
-#     return url
-
-# def imageAnalyzer(uploadedImage: UploadFile):
-#     try:
-#         # 1. Read image content
-#         contents =  uploadedImage.read()
-
-#         openai_headers = {
-#             "Authorization": f"Bearer {api_key}",
-#             "Content-Type": "application/json"
-#         }
-
-#         # 2. Encode as base64 for sending over API
-#         base64_image = base64.b64encode(contents).decode('utf-8')
-
-#         ENDPOINT = "https://kesav-openai.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
-
-#         # 3. Prepare request payload (adjust based on your model's requirements)
-#         payload = {
-#             "model": "gpt-4-vision-preview",  # Specify your GPT-4 Vision model
-#             "messages": [ 
-#                 {"role": "user", "content": [
-#                     {"type": "text", "text": "Analyze this image."}, 
-#                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}} 
-#                 ]}
-#             ],
-#             "max_tokens": 300  # Adjust as needed
-#         }
-
-#         # 4. Send the request to OpenAI API
-#         response = requests.post(ENDPOINT, headers=openai_headers, json=payload)
-#         response.raise_for_status()  # Raise an error for bad status codes
-#         result = response.json()
-
-#         # 5. Process and return the response
-#         response = response.choices[0].message.content
-#     except requests.exceptions.RequestException as e:
-#         return {"status": "error", "message": f"Request to OpenAI API failed: {str(e)}"}
-#     except Exception as e:
-#         return {"status": "error", "message": str(e)}
-    
-#     return response
-
 async def call_maf(ticketId: str):
     client = await getAzureOpenAIClient(AZURE_ENDPOINT_URL, AZURE_OPENAI_KEY, AZURE_OPENAI_MODEL_API_VERSION, False)
     model_output = await run_conversation(client, ticketId)
     return model_output
+
+async def get_use_case(gpt: GPTData) -> str:
+    """
+    Extract the use case from the system message.
+    The system message is expected to be in the format: "You are a helpful assistant for <use_case>."
+    """
+
+    use_case = "DEFAULT"  # Default value if no use case is found
+
+    if "@@@@@" in gpt["instructions"]:
+        instruction_data = gpt["instructions"].split("@@@@@")
+        use_case = instruction_data[1]
+    else:
+        logger.warning("No use case found in the system message.")
+
+    return use_case
+
+async def construct_model_configuration(model_configuration) -> ModelConfiguration:
+    """
+    Construct the model configuration based on the GPT data and provided model configuration.
+    """
+    model_configuration: ModelConfiguration = model_configuration if  isinstance(model_configuration, ModelConfiguration) else ModelConfiguration(**model_configuration)
+    return model_configuration
+    
