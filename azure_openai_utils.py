@@ -2,7 +2,9 @@ import os
 import base64
 import logging
 import json
+import re
 from fastapi.responses import StreamingResponse
+import requests
 import datetime
 import tiktoken
 
@@ -250,7 +252,7 @@ async def get_completion_from_messages_standard(gpt: GPTData, model_configuratio
         else:            
             main_response, follow_up_questions, total_tokens = await extract_json_content(response)
     
-    except (APIConnectionError, RateLimitError) as retryable_ex:
+    except (APIConnectionError) as retryable_ex:
         logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
 
         from dependencies import NiaAzureOpenAIClient
@@ -284,7 +286,86 @@ async def get_completion_from_messages_standard(gpt: GPTData, model_configuratio
             total_tokens = len(token_encoder.encode(str(conversations)))
             main_response = f"All Azure OpenAI endpoints failed. Please try again later.\n\n Exception Details : {str(final_ex)}"
 
-    
+    except (RateLimitError) as retryable_ex:
+        logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
+
+        from dependencies import NiaAzureOpenAIClient
+        logger.info(f"Retrying with next models")
+        # Gather all retry model names from environment variables
+        models_to_try = []
+        i = 1
+        while True:
+            model_env_var = f"GPT_RETRY_MODELS_{i}"
+            alt_model = os.getenv(model_env_var)
+            if not alt_model:
+             break
+            models_to_try.append(alt_model)
+            i += 1
+
+        # Helper to call the model
+        async def call_model(client, model_name, conversations, model_configuration):
+            response = await client.chat.completions.create(
+            model=model_name,
+            messages=conversations,
+            max_tokens=model_configuration.max_tokens,
+            temperature=model_configuration.temperature,
+            top_p=model_configuration.top_p,
+            frequency_penalty=model_configuration.frequency_penalty,
+            presence_penalty=model_configuration.presence_penalty,
+            extra_body=extra_body,
+            seed=100,
+            stop=None,
+            stream=False,
+            user=gpt["user"]
+            )
+            model_response = response.choices[0].message.content
+            if model_response is None or model_response == "":
+                raise ValueError("No Response from Model. Please try again.")
+            return await extract_json_content(response)
+
+        success = False
+        for alt_model in models_to_try:
+            try:
+                main_response, follow_up_questions, total_tokens = await call_model(
+                    client, alt_model, conversations, model_configuration
+                )
+                logger.info(f"Succeeded with alternate model '{alt_model}'")
+                success = True
+                break
+
+            except RateLimitError as alt_rl_ex:
+                logger.warning(
+                    f"Rate-limit on alternate model '{alt_model}': {alt_rl_ex!s}",
+                    exc_info=True,
+                )
+                continue  # try the next model
+
+            except APIConnectionError as alt_conn_ex:
+                logger.warning(
+                    f"Connection issue on alternate model '{alt_model}': {alt_conn_ex!s}",
+                    exc_info=True,
+                )
+                break
+
+        # If we exhausted the loop with no success, go to the next subscription
+        if not success:
+            logger.info("All models on this endpoint exhausted – switching subscription")
+            client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
+
+            try:
+                # Start again with the original model on the new endpoint
+                main_response, follow_up_questions, total_tokens = await call_model(
+                    client, gpt["name"], conversations, model_configuration
+                )
+
+            except Exception as final_ex:
+                logger.error("Retry with next subscription also failed", exc_info=True)
+                total_tokens = len(token_encoder.encode(str(conversations)))
+                main_response = (
+                    "All Azure OpenAI endpoints failed. Please try again later.\n\n"
+                    f"Exception Details: {final_ex}"
+                )
+        
     except BadRequestError as be:
         logger.error(f"BadRequestError occurred while fetching model response: {be}", exc_info=True)
         total_tokens = len(token_encoder.encode(str(conversations)))
@@ -350,10 +431,11 @@ async def get_completion_from_messages_stream(gpt: GPTData, model_configuration,
                             full_response_content += chunkContent
                             yield chunkContent
 
-            except (APIConnectionError, RateLimitError) as conn_ex:
-                logger.warning(f"Connection/Rate limit error encountered: {conn_ex}")
+            except APIConnectionError as retryable_ex:
+                logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
+                logger.info(f"Retrying with next endpoint")
+                client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
                 try:
-                    client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
                     response = await client.chat.completions.create(
                         model=gpt["name"],
                         messages=conversations,
@@ -362,10 +444,10 @@ async def get_completion_from_messages_stream(gpt: GPTData, model_configuration,
                         top_p=model_configuration.top_p,
                         frequency_penalty=model_configuration.frequency_penalty,
                         presence_penalty=model_configuration.presence_penalty,
-                        stop=None,
-                        stream=True,
                         extra_body=extra_body,
                         seed=100,
+                        stop=None,
+                        stream=True,
                         user=gpt["user"]
                     )
 
@@ -375,10 +457,86 @@ async def get_completion_from_messages_stream(gpt: GPTData, model_configuration,
                             if chunkContent is not None:
                                 full_response_content += chunkContent
                                 yield chunkContent
-                except Exception as retry_ex:
-                    logger.error(f"Retry also failed: {retry_ex}")
-                    full_response_content = f"All endpoints failed due to: {str(retry_ex)}"
+                except Exception as final_ex:
+                    logger.error(f"Retry also failed: {final_ex}", exc_info=True)
+                    full_response_content = f"All Azure OpenAI endpoints failed. Please try again later.\n\n Exception Details : {str(final_ex)}"
                     yield full_response_content
+
+            except RateLimitError as retryable_ex:
+                logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
+                logger.info(f"Retrying with next models")
+                # Gather all retry model names from environment variables
+                models_to_try = []
+                i = 1
+                while True:
+                    model_env_var = f"GPT_RETRY_MODELS_{i}"
+                    alt_model = os.getenv(model_env_var)
+                    if not alt_model:
+                        break
+                    models_to_try.append(alt_model)
+                    i += 1
+
+                # Helper to call the model
+                async def call_model(client, model_name, conversations, model_configuration):
+                    response = await client.chat.completions.create(
+                        model=model_name,
+                        messages=conversations,
+                        max_tokens=model_configuration.max_tokens,
+                        temperature=model_configuration.temperature,
+                        top_p=model_configuration.top_p,
+                        frequency_penalty=model_configuration.frequency_penalty,
+                        presence_penalty=model_configuration.presence_penalty,
+                        extra_body=extra_body,
+                        seed=100,
+                        stop=None,
+                        stream=True,
+                        user=gpt["user"]
+                    )
+                    async for chunk in response:
+                        if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
+                            chunkContent = chunk.choices[0].delta.content
+                            if chunkContent is not None:
+                                nonlocal full_response_content
+                                full_response_content += chunkContent
+                                yield chunkContent
+
+                success = False
+                for alt_model in models_to_try:
+                    try:
+                        async for chunk in call_model(client, alt_model, conversations, model_configuration):
+                            yield chunk
+                        logger.info(f"Succeeded with alternate model '{alt_model}'")
+                        success = True
+                        break
+
+                    except RateLimitError as alt_rl_ex:
+                        logger.warning(
+                            f"Rate-limit on alternate model '{alt_model}': {alt_rl_ex!s}",
+                            exc_info=True,
+                        )
+                        continue  # try the next model
+
+                    except APIConnectionError as alt_conn_ex:
+                        logger.warning(
+                            f"Connection issue on alternate model '{alt_model}': {alt_conn_ex!s}",
+                            exc_info=True,
+                        )
+                        break
+
+                # If we exhausted the loop with no success, go to the next subscription
+                if not success:
+                    logger.info("All models on this endpoint exhausted – switching subscription")
+                    client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
+                    try:
+                        async for chunk in call_model(client, gpt["name"], conversations, model_configuration):
+                            yield chunk
+                    except Exception as final_ex:
+                        logger.error("Retry with next subscription also failed", exc_info=True)
+                        full_response_content = (
+                            "All Azure OpenAI endpoints failed. Please try again later.\n\n"
+                            f"Exception Details: {final_ex}"
+                        )
+                        yield full_response_content
         
         # Create a wrapper generator that handles post-stream processing
         async def response_wrapper():
@@ -483,23 +641,26 @@ async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration
             logger.error(f"Error occurred while fetching model response: {e}", exc_info=True)
             main_response = str(e)
 
-    except (APIConnectionError, RateLimitError) as retryable_ex:
+    except (APIConnectionError) as retryable_ex:
         logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
 
         from dependencies import NiaAzureOpenAIClient
+        logger.info(f"Retrying with next endpoint")
         client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
         try:
             response = await client.chat.completions.create(
-                model=GPT_4o_2_MODEL_NAME,
+                model=gpt["name"],
                 messages=conversations,
                 max_tokens=model_configuration.max_tokens,
                 temperature=model_configuration.temperature,
                 top_p=model_configuration.top_p,
                 frequency_penalty=model_configuration.frequency_penalty,
                 presence_penalty=model_configuration.presence_penalty,
+                # extra_body=extra_body,
+                seed=100,
                 stop=None,
                 stream=False,
-                seed=100
+                user=gpt["user"]
             )
             model_response = response.choices[0].message.content
             logger.info(f"Retry Model Response is {response}")
@@ -513,6 +674,86 @@ async def analyzeImage_standard(gpt: GPTData, conversations, model_configuration
             logger.error(f"Retry also failed: {final_ex}", exc_info=True)
             total_tokens = len(token_encoder.encode(str(conversations)))
             main_response = f"All Azure OpenAI endpoints failed. Please try again later.\n\n Exception Details : {str(final_ex)}"
+
+    except (RateLimitError) as retryable_ex:
+        logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
+
+        from dependencies import NiaAzureOpenAIClient
+        logger.info(f"Retrying with next models")
+        # Gather all retry model names from environment variables
+        models_to_try = []
+        i = 1
+        while True:
+            model_env_var = f"GPT_RETRY_MODELS_{i}"
+            alt_model = os.getenv(model_env_var)
+            if not alt_model:
+                break
+            models_to_try.append(alt_model)
+            i += 1
+
+        # Helper to call the model
+        async def call_model(client, model_name, conversations, model_configuration):
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=conversations,
+                max_tokens=model_configuration.max_tokens,
+                temperature=model_configuration.temperature,
+                top_p=model_configuration.top_p,
+                frequency_penalty=model_configuration.frequency_penalty,
+                presence_penalty=model_configuration.presence_penalty,
+                # extra_body=extra_body,
+                seed=100,
+                stop=None,
+                stream=False,
+                user=gpt["user"]
+            )
+            model_response = response.choices[0].message.content
+            if model_response is None or model_response == "":
+                raise ValueError("No Response from Model. Please try again.")
+            return await extract_json_content(response)
+
+        success = False
+        for alt_model in models_to_try:
+            try:
+                main_response, follow_up_questions, total_tokens = await call_model(
+                    client, alt_model, conversations, model_configuration
+                )
+                logger.info(f"Succeeded with alternate model '{alt_model}'")
+                success = True
+                break
+
+            except RateLimitError as alt_rl_ex:
+                logger.warning(
+                    f"Rate-limit on alternate model '{alt_model}': {alt_rl_ex!s}",
+                    exc_info=True,
+                )
+                continue  # try the next model
+
+            except APIConnectionError as alt_conn_ex:
+                logger.warning(
+                    f"Connection issue on alternate model '{alt_model}': {alt_conn_ex!s}",
+                    exc_info=True,
+                )
+                break
+
+        # If we exhausted the loop with no success, go to the next subscription
+        if not success:
+            logger.info("All models on this endpoint exhausted – switching subscription")
+            client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
+
+            try:
+                # Start again with the original model on the new endpoint
+                main_response, follow_up_questions, total_tokens = await call_model(
+                    client, gpt["name"], conversations, model_configuration
+                )
+
+            except Exception as final_ex:
+                logger.error("Retry with next subscription also failed", exc_info=True)
+                total_tokens = len(token_encoder.encode(str(conversations)))
+                main_response = (
+                    "All Azure OpenAI endpoints failed. Please try again later.\n\n"
+                    f"Exception Details: {final_ex}"
+                )
     
     except BadRequestError as be:
         logger.error(f"BadRequestError occurred while fetching model response: {be}", exc_info=True)
@@ -565,33 +806,110 @@ async def analyzeImage_stream(gpt: GPTData, conversations, model_configuration, 
                             if chunkContent is not None:
                                 full_response_content += chunkContent
                                 yield chunkContent
-                except (APIConnectionError, RateLimitError) as conn_ex:
-                    logger.warning(f"Connection/Rate limit error encountered: {conn_ex}")
+                except APIConnectionError as retryable_ex:
+                    logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
+                    logger.info(f"Retrying with next endpoint")
+                    client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
                     try:
-                        client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
                         response = await client.chat.completions.create(
-                            model=GPT_4o_2_MODEL_NAME,
+                            model=gpt["name"],
                             messages=conversations,
-                            max_completion_tokens=model_configuration.max_tokens,
+                            max_tokens=model_configuration.max_tokens,
                             temperature=model_configuration.temperature,
                             top_p=model_configuration.top_p,
                             frequency_penalty=model_configuration.frequency_penalty,
                             presence_penalty=model_configuration.presence_penalty,
                             stop=None,
                             stream=True,
-                            seed=100
+                            seed=100,
+                            user=gpt["user"]
                         )
-
                         async for chunk in response:
                             if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
                                 chunkContent = chunk.choices[0].delta.content
                                 if chunkContent is not None:
                                     full_response_content += chunkContent
                                     yield chunkContent
-                    except Exception as retry_ex:
-                        logger.error(f"Retry also failed: {retry_ex}")
-                        full_response_content = f"All endpoints failed due to: {str(retry_ex)}"
+                    except Exception as final_ex:
+                        logger.error(f"Retry also failed: {final_ex}", exc_info=True)
+                        full_response_content = f"All Azure OpenAI endpoints failed. Please try again later.\n\n Exception Details : {str(final_ex)}"
                         yield full_response_content
+
+                except RateLimitError as retryable_ex:
+                    logger.warning(f"Retryable error: {type(retryable_ex).__name__} - {retryable_ex}", exc_info=True)
+                    logger.info(f"Retrying with next models")
+                    # Gather all retry model names from environment variables
+                    models_to_try = []
+                    i = 1
+                    while True:
+                        model_env_var = f"GPT_RETRY_MODELS_{i}"
+                        alt_model = os.getenv(model_env_var)
+                        if not alt_model:
+                            break
+                        models_to_try.append(alt_model)
+                        i += 1
+
+                    # Helper to call the model
+                    async def call_model(client, model_name, conversations, model_configuration):
+                        response = await client.chat.completions.create(
+                            model=model_name,
+                            messages=conversations,
+                            max_tokens=model_configuration.max_tokens,
+                            temperature=model_configuration.temperature,
+                            top_p=model_configuration.top_p,
+                            frequency_penalty=model_configuration.frequency_penalty,
+                            presence_penalty=model_configuration.presence_penalty,
+                            stop=None,
+                            stream=True,
+                            seed=100,
+                            user=gpt["user"]
+                        )
+                        async for chunk in response:
+                            if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, 'content'):
+                                chunkContent = chunk.choices[0].delta.content
+                                if chunkContent is not None:
+                                    nonlocal full_response_content
+                                    full_response_content += chunkContent
+                                    yield chunkContent
+
+                    success = False
+                    for alt_model in models_to_try:
+                        try:
+                            async for chunk in call_model(client, alt_model, conversations, model_configuration):
+                                yield chunk
+                            logger.info(f"Succeeded with alternate model '{alt_model}'")
+                            success = True
+                            break
+
+                        except RateLimitError as alt_rl_ex:
+                            logger.warning(
+                                f"Rate-limit on alternate model '{alt_model}': {alt_rl_ex!s}",
+                                exc_info=True,
+                            )
+                            continue  # try the next model
+
+                        except APIConnectionError as alt_conn_ex:
+                            logger.warning(
+                                f"Connection issue on alternate model '{alt_model}': {alt_conn_ex!s}",
+                                exc_info=True,
+                            )
+                            break
+
+                    # If we exhausted the loop with no success, go to the next subscription
+                    if not success:
+                        logger.info("All models on this endpoint exhausted – switching subscription")
+                        client = await NiaAzureOpenAIClient().retry_with_next_endpoint()
+
+                        try:
+                            async for chunk in call_model(client, gpt["name"], conversations, model_configuration):
+                                yield chunk
+                        except Exception as final_ex:
+                            logger.error("Retry with next subscription also failed", exc_info=True)
+                            full_response_content = (
+                                "All Azure OpenAI endpoints failed. Please try again later.\n\n"
+                                f"Exception Details: {final_ex}"
+                            )
+                            yield full_response_content
             
             # Create a wrapper generator that handles post-stream processing
             async def response_wrapper():

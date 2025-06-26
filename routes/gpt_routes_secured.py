@@ -432,8 +432,8 @@ async def get_prompts_for_usecase(gpt_id: str, usecase: str, user: str, loggedUs
         logger.error(f"Error occurred while fetching prompts: {e}", exc_info=True)
         return JSONResponse({"error": f"Error occurred while fetching prompts: {e}"}, status_code=500)
 
-@router.post("/update_prompt/{gpt_id}/{usecase}/{user}/{refinedPrompt}")
-async def update_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, refinedPrompt: str, loggedUser: Annotated[dict, Depends(azure_scheme)]):
+@router.post("/update_prompt/{gpt_id}/{usecase}/{user}/{refinedPrompt}/{promptTitle}")
+async def update_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, refinedPrompt: str, loggedUser: Annotated[dict, Depends(azure_scheme)], promptTitle: str):
     try:
 
         user = loggedUser.name  # Extract the username from the user token payload
@@ -442,7 +442,7 @@ async def update_prompt_for_usecase(request: Request, gpt_id: str, usecase: str,
         if not all([gpt_id, usecase, user, refinedPrompt]):
             return JSONResponse({"success": False, "error": "Missing required fields"}, status_code=400)
 
-        result = await update_prompt(gpt_id, usecase, user, refinedPrompt)
+        result = await update_prompt(gpt_id, usecase, user, refinedPrompt, promptTitle)
         logger.info(f"Prompt updated successfully: {result}")
         return JSONResponse({"success": True}, status_code=200)
         
@@ -525,8 +525,9 @@ async def refinePrompt(
         # Process prompt
         response = await validator.process_prompt_optimized(input_prompt, system_prompt)
         refinedPrompt = response.refined_prompt
-        logger.info(f"Refined prompt : {refinedPrompt} Length : {len(refinedPrompt)}")
-        update_response = await update_prompt(gpt_id, usecase, user, refinedPrompt)
+        promptTitle = response.title if hasattr(response, "title") else "Simple Prompt"
+        logger.info(f"Title: {promptTitle} Refined prompt : {refinedPrompt} Length : {len(refinedPrompt)} ")
+        update_response = await update_prompt(gpt_id, usecase, user, refinedPrompt, promptTitle)
         logger.info(f"Prompt updated: {update_response}")
 
         return JSONResponse({"refined_prompt": response.dict() if hasattr(response, "dict") else response.__dict__}, status_code=200)

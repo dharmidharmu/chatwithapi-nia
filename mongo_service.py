@@ -112,14 +112,67 @@ async def create_usecase_for_document_search(gpt_id: str, use_case_name: str, in
     use_case_created = False
     label = "DOC_SEARCH"
 
+    usecases_collection = await get_collection("usecases")
+    if gpt_id is not None:
+        existing_use_cases = await usecases_collection.find({"gpt_id": ObjectId(gpt_id), "name": {"$regex": "^DOC_SEARCH"}}).to_list(None)
+    else:
+        existing_use_cases = await usecases_collection.find({"name": {"$regex": "^DOC_SEARCH"}}).to_list(None)
+
+    # Extract prompts from existing use case if available
+    prompts = []
+    if existing_use_cases and len(existing_use_cases) > 0:
+        # Take prompts from the first matching use case
+        prompts = existing_use_cases[0].get("prompts", [])
+
     use_case_document = {
         "name": label,
         "description": label,
         "instructions": "You are an AI document analysis specialist. When answering user queries, base your response solely on the retrieved documentation without adding external information. Begin by directly addressing the user's question, structuring your response in a clear, professional format. Reference specific sections or keywords from the documentation to support your points. For multi-part queries, organize with appropriate headers or numbering for clarity. If the documentation is insufficient to fully answer the query, acknowledge these limitations transparently. For ambiguous requests, ask specific clarifying questions. Present information in the user's preferred format when specified.",
         "gpt_id": ObjectId(gpt_id),
         "index_name": index_name,
-        "semantic_configuration_name": semantic_configuration_name
+        "semantic_configuration_name": semantic_configuration_name,
     }
+
+    if prompts:
+        use_case_document["prompts"] = prompts
+    else:
+        use_case_document["prompts"] = [
+            {
+            "role": "procurement officer",
+            "prompt": "Find the payment terms and billing cycle details in the canteen services contract with Food Solutions Ltd. for our corporate headquarters.",
+            "key": "K001",
+            "title": "Payment Terms Search",
+            "user": "Default"
+            },
+            {
+            "role": "facility manager",
+            "prompt": "Search for food quality and hygiene standards clauses in the current cafeteria management contract with Catering Services.",
+            "key": "K002",
+            "title": "Quality Standards",
+            "user": "Default"
+            },
+            {
+            "role": "HR manager",
+            "prompt": "Locate the employee transport service agreement with Transport, specifically the pickup points and schedule commitments.",
+            "key": "K003",
+            "title": "Transport Schedule",
+            "user": "Default"
+            },
+            {
+            "role": "legal team",
+            "prompt": "Find liability and insurance clauses in the staff shuttle service contract with Commute Services, particularly regarding accident coverage.",
+            "key": "K004",
+            "title": "Liability Terms",
+            "user": "Default"
+            },
+            {
+            "role": "contract administrator",
+            "prompt": "Search for termination clauses and notice period requirements in both transport and canteen service agreements.",
+            "key": "K005",
+            "title": "Contract Terms",
+            "user": "Default"
+            }
+        ]
 
     # Step 1 : Delete the existing use case
     # Search for gpt that starts with Chat with (only one should be available per gpt)
@@ -385,7 +438,7 @@ async def get_prompts(gpt_id: str, use_case_name: str, user: str):
 
     return prompt.get("prompts") if prompt else None
 
-async def update_prompt(gpt_id: str, use_case_name: str, user: str, refinedPrompt: str):
+async def update_prompt(gpt_id: str, use_case_name: str, user: str, refinedPrompt: str, promptTitle: str):
     """
     Fetch the prompt field for a given GPT ID and use case name from the "prompts" collection.
     """
@@ -414,7 +467,7 @@ async def update_prompt(gpt_id: str, use_case_name: str, user: str, refinedPromp
             "role": "Assistant/Helper",
             "prompt": refinedPrompt,
             "key": next_key,
-            "title": "Simple Prompt",
+            "title": promptTitle,
             "user": user
         }
         if "prompts" not in prompt or not isinstance(prompt["prompts"], list):
