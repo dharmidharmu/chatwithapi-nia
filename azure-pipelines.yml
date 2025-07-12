@@ -10,40 +10,61 @@ variables:
 
 stages:
   - stage: Build
-    displayName: 'Build FastAPI App'
+    displayName: 'Build & Zip FastAPI'
     jobs:
       - job: BuildJob
-        displayName: 'Install Dependencies'
+        displayName: 'Build Job'
         pool:
           vmImage: 'windows-latest'
         steps:
+          # Python setup
           - task: UsePythonVersion@0
             inputs:
               versionSpec: '$(pythonVersion)'
               addToPath: true
-            displayName: 'Use Python $(pythonVersion)'
+            displayName: 'Use Python'
 
           - script: |
               python -m venv venv
               call venv\Scripts\activate
-              pip install --upgrade pip
               pip install -r requirements.txt
-            workingDirectory: '$(Build.SourcesDirectory)'
-            displayName: 'Install Python Requirements'
+            displayName: 'Install Python Dependencies'
+
+          # Node setup
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '18.x'
+            displayName: 'Use Node.js'
 
           - script: |
-              xcopy /E /I /Y "$(Build.SourcesDirectory)\*" "$(packageDir)\"
-            displayName: 'Copy App Files for Deployment'
+              cd $(reactFolder)
+              npm install
+              npm run build
+            displayName: 'Build React Frontend'
 
+          # Copy React build to FastAPI static folder
+          - script: |
+              rmdir /S /Q $(staticFolder)
+              mkdir $(staticFolder)
+              xcopy /E /I /Y "$(reactFolder)\dist\*" "$(staticFolder)\"
+            displayName: 'Copy React Build to Static Folder'
+
+          # Zip the entire app
+          - powershell: |
+              Add-Type -A 'System.IO.Compression.FileSystem'
+              [IO.Compression.ZipFile]::CreateFromDirectory("$(Build.SourcesDirectory)", "$(Build.ArtifactStagingDirectory)\$(zipName)")
+            displayName: 'Zip FastAPI Project'
+
+          # Publish zipped artifact
           - task: PublishBuildArtifacts@1
             inputs:
-              PathtoPublish: '$(packageDir)'
-              ArtifactName: 'fastapi-app'
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)\$(zipName)'
+              ArtifactName: 'fastapi-zipped'
               publishLocation: 'Container'
-            displayName: 'Publish FastAPI App Artifact'
+            displayName: 'Publish Zipped Artifact'
 
   - stage: Deploy
-    displayName: 'Deploy to Azure App Service (FastAPI)'
+    displayName: 'Deploy Zipped FastAPI App'
     dependsOn: Build
     condition: succeeded()
     jobs:
@@ -53,12 +74,12 @@ stages:
           vmImage: 'windows-latest'
         steps:
           - download: current
-            artifact: fastapi-app
+            artifact: fastapi-zipped
 
           - task: AzureWebApp@1
             inputs:
               azureSubscription: '$(serviceConnection)'
               appType: 'webAppLinux'
               appName: '$(appName)'
-              package: '$(Pipeline.Workspace)/fastapi-app'
-            displayName: 'Deploy FastAPI App to Azure App Service'
+              package: '$(Pipeline.Workspace)/fastapi-zipped/$(zipName)'
+            displayName: 'Deploy FastAPI App via Zip'
