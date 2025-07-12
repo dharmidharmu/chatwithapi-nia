@@ -276,6 +276,7 @@ class PromptValidator:
         # OUTPUT FORMAT
         Return your analysis in this exact JSON format (do not include any explanation text outside the JSON):
         {{
+            "title": "Provide a two word concise title for the analysis eg: 'Cross-sell Campaign' for a prompt 'Generate a follow-up email for customers who purchased the Logitech 4K Webcam, offering complementary accessories.'",
             "pre_evaluation": "use the evaluation definitions to evaluate the original prompt",
             "complexity_assessment": "simple or complex",
             "needs_refinement": "true or false",
@@ -295,6 +296,7 @@ class PromptValidator:
             # Extract adherence values for pre-evaluation
             pre_evaluation_result = data.get("pre_evaluation", {})
             post_evaluation_result = data.get("post_evaluation", {})
+            title_result = data.get("title", "Simple Prompt")
             
             # Extract refined prompt (use original if refinement was not needed)
             needs_refinement = data.get("needs_refinement", "false").lower() == "true"
@@ -302,6 +304,7 @@ class PromptValidator:
             
             # Create and return the validation result with justifications
             return PromptValidationResult(
+                title=title_result,
                 original_prompt=prompt,
                 refined_prompt=refined_prompt,
                 pre_evaluation_result=pre_evaluation_result,

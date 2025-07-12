@@ -14,8 +14,8 @@ from azure.identity import ClientSecretCredential
 from azure.core.exceptions import AzureError
 
 from pymongo.errors import DuplicateKeyError
-from auth_msal import get_current_user
 from data.GPTData import GPTData
+from auth_config import azure_scheme
 from data.InputPrompt import InputPrompt
 from data.ModelConfiguration import ModelConfiguration
 from gpt_utils import handle_upload_files, create_folders
@@ -42,12 +42,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/create_gpt")
-async def create_gpt(request: Request, user: Annotated[dict, Depends(get_current_user)], loggedUser: str = Cookie(None), gpt: str = Body(...), files: list[UploadFile] = File(...)):
+async def create_gpt(request: Request, user: Annotated[dict, Depends(azure_scheme)], loggedUser: str = Cookie(None), gpt: str = Body(...), files: list[UploadFile] = File(...)):
     try:
         # Parse the JSON string into a dictionary
         gpt = json.loads(gpt)
         #loggedUser = await getUserName(request, "create_gpt")
-        loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+        loggedUser = user.name  # Extract the username from the user token payload
         logger.info(f"Logged User: {loggedUser}")
 
         if loggedUser != None and loggedUser != "N/A":
@@ -83,11 +83,13 @@ async def create_gpt(request: Request, user: Annotated[dict, Depends(get_current
     return response
 
 @router.get("/get_gpts")
-async def get_gpts(request: Request, user: Annotated[dict, Depends(get_current_user)]):
+async def get_gpts(request: Request, user: Annotated[dict, Depends(azure_scheme)]):
     gpts = []
     #loggedUser = await getUserName(request, "get_gpts")
     #logger.info(f"User: {json.dumps(request.session.get('user'))}")
-    loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+    logger.info(f"User object : {user}")
+    print(user)
+    loggedUser = user.name  # Extract the username from the user token payload
     logger.info(f"Logged User: {loggedUser}")
 
     if loggedUser != None and loggedUser != "N/A":
@@ -98,7 +100,7 @@ async def get_gpts(request: Request, user: Annotated[dict, Depends(get_current_u
     return JSONResponse({"gpts": gpts}, status_code=200)
 
 @router.post("/chat/{gpt_id}/{gpt_name}")
-async def chat(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(get_current_user)], user_message: str = Form(...), params: str = Form(...), uploadedImage: UploadFile = File(...)):
+async def chat(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(azure_scheme)], user_message: str = Form(...), params: str = Form(...), uploadedImage: UploadFile = File(...)):
     if not user_message:
         return JSONResponse({"error": "Missing 'user_message' in request body."}, status_code=400)
     
@@ -123,11 +125,11 @@ async def chat(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dic
     return JSONResponse({"response": response['model_response'], "total_tokens" : response['total_tokens'] if response['total_tokens'] else 0, "follow_up_questions": response['follow_up_questions'] }, status_code=200)
 
 @router.post("/chat/stream/{gpt_id}/{gpt_name}")
-async def chat(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(get_current_user)], user_message: str = Form(...), params: str = Form(...), uploadedImage: UploadFile = File(...)):
+async def chat(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(azure_scheme)], user_message: str = Form(...), params: str = Form(...), uploadedImage: UploadFile = File(...)):
     if not user_message:
         return JSONResponse({"error": "Missing 'user_message' in request body."}, status_code=400)
     
-    loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+    loggedUser = user.name  # Extract the username from the user token payload
     logger.info(f"Logged User: {loggedUser}")
     
     try:
@@ -149,14 +151,14 @@ async def chat(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dic
         return JSONResponse({"error": f"Error while getting response from Model. Details : \n {he.detail}"}, status_code=500)
 
 @router.post("/update_instruction/{gpt_id}/{gpt_name}/{usecase_id}")
-async def update_instruction(request: Request, gpt_id: str, gpt_name: str, usecase_id: str, user: Annotated[dict, Depends(get_current_user)]):
+async def update_instruction(request: Request, gpt_id: str, gpt_name: str, usecase_id: str, user: Annotated[dict, Depends(azure_scheme)]):
     logger.info(f"Updating instruction for GPT with ID: {gpt_id} Name: {gpt_name} Usecase : {usecase_id}")
     logger.info(f"User: {user}")
     # Ensure that the user is authenticated and has the necessary permissions
 
     try:
         #loggedUser = await getUserName(request, "update_instruction")
-        loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+        loggedUser = user.name  # Extract the username from the user token payload
         logger.info(f"Logged User: {loggedUser}")
         if loggedUser != None and loggedUser != "N/A":
             result = await update_gpt_instruction(gpt_id, gpt_name, usecase_id, loggedUser)
@@ -177,14 +179,14 @@ async def update_instruction(request: Request, gpt_id: str, gpt_name: str, useca
     return response
 
 @router.put("/upload_document/{gpt_id}/{gpt_name}")
-async def upload_document_index(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(get_current_user)], files: list[UploadFile] = File(...)):
+async def upload_document_index(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(azure_scheme)], files: list[UploadFile] = File(...)):
     logger.info(f"Updating GPT with ID: {gpt_id} Name: {gpt_name}")
     gpts_collection = await get_collection("gpts")
     gpt: GPTData = await gpts_collection.find_one({"_id": ObjectId(gpt_id)})
     logger.info(f"GPT Details: {gpt}")
     try:
         #loggedUser = await getUserName(request, "modify_gpt")
-        loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+        loggedUser = user.name  # Extract the username from the user token payload
         logger.info(f"Logged User: {loggedUser}")
 
         if loggedUser != None and loggedUser != "N/A":
@@ -229,12 +231,12 @@ async def upload_document_index(request: Request, gpt_id: str, gpt_name: str, us
     return response
 
 @router.put("/update_gpt/{gpt_id}/{gpt_name}")
-async def modify_gpt(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(get_current_user)], gpt: str = Body(...), files: list[UploadFile] = File(...)):
+async def modify_gpt(request: Request, gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(azure_scheme)], gpt: str = Body(...), files: list[UploadFile] = File(...)):
     logger.info(f"Updating GPT with ID: {gpt_id} Name: {gpt_name}")
 
     try:
         #loggedUser = await getUserName(request, "modify_gpt")
-        loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+        loggedUser = user.name  # Extract the username from the user token payload
         logger.info(f"Logged User: {loggedUser}")
         if loggedUser != None and loggedUser != "N/A":
             # Parse the JSON string into a dictionary
@@ -274,10 +276,10 @@ async def modify_gpt(request: Request, gpt_id: str, gpt_name: str, user: Annotat
     return response
     
 @router.delete("/delete_gpt/{gpt_id}/{gpt_name}")
-async def remove_gpt(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(get_current_user)]):
+async def remove_gpt(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(azure_scheme)]):
     logger.info(f"Deleting GPT: {gpt_id} Name: {gpt_name}")
 
-    loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+    loggedUser = user.name  # Extract the username from the user token payload
     logger.info(f"Logged User: {loggedUser}")
 
     # Delete the GPT
@@ -291,9 +293,9 @@ async def remove_gpt(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(g
     return response
 
 @router.delete("/delete_all_gpts")
-async def delete_all_gpts(request: Request, user: Annotated[dict, Depends(get_current_user)]):
+async def delete_all_gpts(request: Request, user: Annotated[dict, Depends(azure_scheme)]):
     #loggedUser = await getUserName(request, "delete_all_gpts")
-    loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+    loggedUser = user.name  # Extract the username from the user token payload
     logger.info(f"Logged User: {loggedUser}")
     if loggedUser != None and loggedUser != "N/A":
         result = await delete_gpts(loggedUser)  # Delete all documents in the collection
@@ -307,10 +309,10 @@ async def delete_all_gpts(request: Request, user: Annotated[dict, Depends(get_cu
     return response
     
 @router.get("/chat_history/{gpt_id}/{gpt_name}")
-async def get_chat_history(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(get_current_user)]):
+async def get_chat_history(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(azure_scheme)]):
     logger.info(f"Fetching chat history for GPT: {gpt_id} Name: {gpt_name}")
 
-    loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+    loggedUser = user.name  # Extract the username from the user token payload
     logger.info(f"Logged User: {loggedUser}")
 
     chat_history = await fetch_chat_history(gpt_id, gpt_name, max_tokens_in_conversation)  # Fetch chat history from MongoDB
@@ -334,10 +336,10 @@ async def get_chat_history(gpt_id: str, gpt_name: str, user: Annotated[dict, Dep
     return response
 
 @router.get("/chat_history/{gpt_id}/{gpt_name}/{use_case_id}")
-async def get_chat_history_for_use_case(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(get_current_user)], use_case_id: str = "all"):
+async def get_chat_history_for_use_case(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(azure_scheme)], use_case_id: str = "all"):
     logger.info(f"Fetching chat history for GPT: {gpt_id} Name: {gpt_name}")
 
-    loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+    loggedUser = user.name  # Extract the username from the user token payload
     logger.info(f"Logged User: {loggedUser}")
 
     if use_case_id == "all":
@@ -364,9 +366,9 @@ async def get_chat_history_for_use_case(gpt_id: str, gpt_name: str, user: Annota
     return response
 
 @router.put("/clear_chat_history/{gpt_id}/{gpt_name}")
-async def clear_chat_history(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(get_current_user)]):
+async def clear_chat_history(gpt_id: str, gpt_name: str, user: Annotated[dict, Depends(azure_scheme)]):
     logger.info(f"Clearing chat history for GPT: {gpt_id} Name: {gpt_name}")
-    loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+    loggedUser = user.name  # Extract the username from the user token payload
     logger.info(f"Logged User: {loggedUser}")
 
     result = await delete_chat_history(gpt_id, gpt_name)  # Delete all documents in the collection
@@ -381,9 +383,9 @@ async def clear_chat_history(gpt_id: str, gpt_name: str, user: Annotated[dict, D
     return response
     
 @router.get("/usecases/{gpt_id}")
-async def fetch_usecases(gpt_id: str, user: Annotated[dict, Depends(get_current_user)]):
+async def fetch_usecases(gpt_id: str, user: Annotated[dict, Depends(azure_scheme)]):
     try:
-        loggedUser = user.get("name", "N/A")  # Extract the username from the user token payload
+        loggedUser = user.name  # Extract the username from the user token payload
         logger.info(f"Logged User: {loggedUser}")
         result = await get_usecases(gpt_id)
         logger.info(f"Use cases fetched successfully: {len(result)}")
@@ -395,11 +397,11 @@ async def fetch_usecases(gpt_id: str, user: Annotated[dict, Depends(get_current_
     return response
 
 @router.get("/get_prompts/{gpt_id}/{usecase}/{user}")
-async def get_prompts_for_usecase(gpt_id: str, usecase: str, user: str, loggedUser: Annotated[dict, Depends(get_current_user)]):
+async def get_prompts_for_usecase(gpt_id: str, usecase: str, user: str, loggedUser: Annotated[dict, Depends(azure_scheme)]):
     """
     Fetch the use case by ID and return the 'prompt' field.
     """
-    user = loggedUser.get("name", "N/A")  # Extract the username from the user token payload
+    user = loggedUser.name  # Extract the username from the user token payload
     logger.info(f"Logged User: {loggedUser}")
     try:
         # Fetch the use case details for the given GPT ID and use case ID
@@ -430,17 +432,17 @@ async def get_prompts_for_usecase(gpt_id: str, usecase: str, user: str, loggedUs
         logger.error(f"Error occurred while fetching prompts: {e}", exc_info=True)
         return JSONResponse({"error": f"Error occurred while fetching prompts: {e}"}, status_code=500)
 
-@router.post("/update_prompt/{gpt_id}/{usecase}/{user}/{refinedPrompt}")
-async def update_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, refinedPrompt: str, loggedUser: Annotated[dict, Depends(get_current_user)]):
+@router.post("/update_prompt/{gpt_id}/{usecase}/{user}/{refinedPrompt}/{promptTitle}")
+async def update_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, refinedPrompt: str, loggedUser: Annotated[dict, Depends(azure_scheme)], promptTitle: str):
     try:
 
-        user = loggedUser.get("name", "N/A")  # Extract the username from the user token payload
+        user = loggedUser.name  # Extract the username from the user token payload
         logger.info(f"Logged User: {user}")
 
         if not all([gpt_id, usecase, user, refinedPrompt]):
             return JSONResponse({"success": False, "error": "Missing required fields"}, status_code=400)
 
-        result = await update_prompt(gpt_id, usecase, user, refinedPrompt)
+        result = await update_prompt(gpt_id, usecase, user, refinedPrompt, promptTitle)
         logger.info(f"Prompt updated successfully: {result}")
         return JSONResponse({"success": True}, status_code=200)
         
@@ -450,9 +452,9 @@ async def update_prompt_for_usecase(request: Request, gpt_id: str, usecase: str,
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 @router.delete("/delete_prompt/{gpt_id}/{usecase}/{user}/{key}")
-async def delete_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, key: str, loggedUser: Annotated[dict, Depends(get_current_user)]):
+async def delete_prompt_for_usecase(request: Request, gpt_id: str, usecase: str, user: str, key: str, loggedUser: Annotated[dict, Depends(azure_scheme)]):
     try:
-        user = loggedUser.get("name", "N/A")  # Extract the username from the user token payload
+        user = loggedUser.name  # Extract the username from the user token payload
         logger.info(f"Logged User: {user}")
     
         if not all([gpt_id, usecase, user, key]):
@@ -467,7 +469,7 @@ async def delete_prompt_for_usecase(request: Request, gpt_id: str, usecase: str,
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 @router.get("/logs")
-async def get_logs(user: Annotated[dict, Depends(get_current_user)]):
+async def get_logs(user: Annotated[dict, Depends(azure_scheme)]):
     """Fetch the contents of the app.log file."""
     log_file_path = "logs/app.log" # Update with your actual log file path
 
@@ -482,7 +484,7 @@ async def get_logs(user: Annotated[dict, Depends(get_current_user)]):
     return {"log_content": log_content}
 
 @router.get("/deployedModels")
-async def getDeployedModelsFromAzure(user: Annotated[dict, Depends(get_current_user)]):
+async def getDeployedModelsFromAzure(user: Annotated[dict, Depends(azure_scheme)]):
     """Fetch the open ai models deployed in azure open ai portal."""
     try:
         deployments = await getDeployments2()
@@ -502,7 +504,7 @@ async def refinePrompt(
     gpt_id: str,
     usecase: str,
     user: str,
-    loggedUser: Annotated[dict, Depends(get_current_user)],
+    loggedUser: Annotated[dict, Depends(azure_scheme)],
     body: InputPrompt = Body(...)
 ):
     """Refine the prompt based on the user query."""
@@ -511,7 +513,7 @@ async def refinePrompt(
     system_prompt: str = None
 
     try:
-        user = loggedUser.get("name", "N/A")  # Extract the username from the user token payload
+        user = loggedUser.name  # Extract the username from the user token payload
         logger.info(f"Logged User: {user}")
         input_prompt = body.prompt
         logger.info(f"Input prompt (Original) : {input_prompt} Length : {len(input_prompt)}")
@@ -523,8 +525,9 @@ async def refinePrompt(
         # Process prompt
         response = await validator.process_prompt_optimized(input_prompt, system_prompt)
         refinedPrompt = response.refined_prompt
-        logger.info(f"Refined prompt : {refinedPrompt} Length : {len(refinedPrompt)}")
-        update_response = await update_prompt(gpt_id, usecase, user, refinedPrompt)
+        promptTitle = response.title if hasattr(response, "title") else "Simple Prompt"
+        logger.info(f"Title: {promptTitle} Refined prompt : {refinedPrompt} Length : {len(refinedPrompt)} ")
+        update_response = await update_prompt(gpt_id, usecase, user, refinedPrompt, promptTitle)
         logger.info(f"Prompt updated: {update_response}")
 
         return JSONResponse({"refined_prompt": response.dict() if hasattr(response, "dict") else response.__dict__}, status_code=200)

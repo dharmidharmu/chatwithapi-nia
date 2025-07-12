@@ -33,7 +33,7 @@ async def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(b
             audience=CLIENT_ID,
             issuer=f"{AUTHORITY}/v2.0"
         )
-        #print(f"Decoded payload: {payload}")  # Debugging line to print the decoded payload
+        print(f"Decoded payload: {payload}")  # Debugging line to print the decoded payload
         return payload
     except JWTError as e:
         raise HTTPException(
@@ -43,5 +43,5 @@ async def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(b
         )
 
 async def get_current_user(payload: dict = Security(verify_jwt_token)):
-    #print(f"Payload {dict(payload)}")  # Debugging line to print the payload
+    print(f"Payload {dict(payload)}")  # Debugging line to print the payload
     return dict(payload)

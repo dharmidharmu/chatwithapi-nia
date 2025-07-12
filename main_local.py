@@ -1,18 +1,24 @@
 import os
 import json
+import traceback
+import uvicorn
 import msal
 import pickle
 import logging
+from dotenv import load_dotenv # For environment variables (recommended)
 
 from fastapi import Cookie, FastAPI, Request, Security
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware import Middleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.responses import RedirectResponse, HTMLResponse
+from starlette.exceptions import HTTPException 
 from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ClientSecretCredential
 from azure.core.exceptions import AzureError
@@ -26,8 +32,6 @@ from routes.gpt_routes_secured import router as gpt_router_secured
 from routes.gpt_routes_unsecured import router as gpt_router_unsecured
 from auth_config import azure_scheme
 
-import uvicorn
-from dotenv import load_dotenv # For environment variables (recommended)
 from standalone_programs.simple_gpt import get_conversation
 
 delimiter = "```"
@@ -53,7 +57,6 @@ CONFIG = {
  "ENDPOINT": os.getenv("ENDPOINT"),  # Downstream API endpoint
 }
 
-# Get logger
 # Logging Configuration
 logs_dir = os.path.join(os.path.dirname(__file__), "logs")
 os.makedirs(logs_dir, exist_ok=True)  # Create logs directory if it doesn't exist
@@ -95,21 +98,21 @@ origins = [
           ]
 
 middleware = [
-#  Middleware(HTTPSRedirectMiddleware),
- Middleware(
-     SessionMiddleware, 
-     secret_key=CONFIG["SESSION_SECRET_KEY"], 
-     same_site="lax",  # Important for cross-site requests
-     https_only=True,  # Only require HTTPS in production, # Important for security - only set cookies over HTTPS
-     max_age=1*24*60*60  # 1 day session expiry
- ),
- Middleware(
-     CORSMiddleware, 
-     allow_origins=origins, 
-     allow_credentials=True,  # Allow cookies to be sent
-     allow_methods=["*"], 
-     allow_headers=["*"]
- )
+    #  Middleware(HTTPSRedirectMiddleware),
+    Middleware(
+        SessionMiddleware, 
+        secret_key=CONFIG["SESSION_SECRET_KEY"], 
+        same_site="lax",  # Important for cross-site requests
+        https_only=True,  # Only require HTTPS in production, # Important for security - only set cookies over HTTPS
+        max_age=1*24*60*60  # 1 day session expiry
+    ),
+    Middleware(
+        CORSMiddleware, 
+        allow_origins=origins, 
+        allow_credentials=True,  # Allow cookies to be sent
+        allow_methods=["*"], 
+        allow_headers=["*"]
+    )
 ]
 
 app = FastAPI(
@@ -162,21 +165,6 @@ async def shutdown_event():
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    # try:
-    #     # Add token to headers BEFORE processing the request
-    #     if hasattr(request, "session") and "access_token" in request.session:
-    #         token = request.session["access_token"]
-    #         # FastAPI/Starlette Headers are immutable, so we need to modify properly
-    #         # Create a modified scope with the new header
-    #         auth_header = f"Bearer {token}"
-    #         request.scope["headers"] = [
-    #             *request.scope["headers"],
-    #             (b"authorization", auth_header.encode())
-    #         ]
-    #         logger.info(f"Added authorization header: {auth_header}")
-    # except (AttributeError, AssertionError) as e:
-    #     logger.warning(f"Session access error: {str(e)}")
-    
     # Now process the request with the added header
     response = await call_next(request)
     
@@ -193,7 +181,69 @@ async def auth_middleware(request: Request, call_next):
     
     return response
 
+# --- Add global exception handlers ---
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, http_exception: HTTPException):
+    """Handle HTTP exceptions."""
+    logger.error(f"HTTP Exception: {http_exception.detail}", exc_info=True)
+    return JSONResponse(
+        status_code = http_exception.status_code,
+        content={"error": str(http_exception.detail)}
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, request_validation_error: RequestValidationError):
+    """Handle validation errors from request body, query params, etc."""
+    logger.error(f"Validation Error (Request Body, Query params etc): {request_validation_error}", exc_info=True)
+    error_details = request_validation_error.errors()
+    return JSONResponse(
+        status_code = 422,
+        content={"error": "Validation error", "detail": error_details}
+    )
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exception: Exception):
+    """Handle any uncaught exception."""
+
+    error_id = "err-" + os.urandom(4).hex()  # Generate a unique ID for the error
+
+    # Get full traceback for detailed logging
+    tb_str = traceback.format_exception(type(exception), exception, exception.__traceback__)
+    error_msg = f"Unhandled exception: {str(exception)}"
+    
+    # Log the full error details with traceback
+    logger.error(f"Error ID: {error_id}. {error_msg}\n{''.join(tb_str)}")
+    
+    # In production, don't return the actual error message to avoid
+    # exposing sensitive information
+    if is_dev_environment:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Internal server error: {str(exception)}", "error_id": error_id}
+        )
+    else:
+        # In production, return a generic error message
+        return JSONResponse(
+            status_code=500,
+            content={"error": "An internal server error occurred", "error_id": error_id}
+        )
+
 # --- Authentication Routes ---
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    user = getSessionUser(request)
+    if user:
+        response = templates.TemplateResponse("index.html", {
+            "request": request, 
+            "user": user,
+            "config": CONFIG  # Pass the CONFIG dictionary
+        })
+        response.set_cookie(key="loggedUser", value=getSessionUser(request), max_age=1800)  # expires in 30 minutes
+    else:
+        response = RedirectResponse(url="/")
+    
+    return response
+
 @app.get("/login")
 async def login(request: Request):
     logger.info(f"Request URL {request.url}")
@@ -201,7 +251,6 @@ async def login(request: Request):
     auth_url = msal_app.get_authorization_request_url(
         CONFIG["SCOPE"],
         redirect_uri=request.url_for("getAToken"),  # FastAPI's url_for
-        #redirect_uri=redirect_uri,
         prompt="select_account",  # Force user to select account on each login (optional)
     )
     logger.info(f"Redirecting to: {auth_url}")
@@ -215,7 +264,6 @@ async def auth_response(request: Request):
      result = msal_app.acquire_token_by_authorization_code(
          request.query_params["code"],
          scopes=CONFIG["SCOPE"],
-         #redirect_uri=redirect_uri
          redirect_uri=request.url_for("getAToken") # Ensure redirect_uri matches the original request
      )
 
@@ -226,9 +274,6 @@ async def auth_response(request: Request):
      logger.info(f"Session ID after login: {request.session.get('session_cookie')}")
      request.session["user"] = result.get("id_token_claims")
      request.session["access_token"] = result.get("access_token")
-     #logger.info(f"User session: {request.session['user']}")
-     #request.session["session"] = result.get("access_token")  # Store access token in session
-     #logger.info(f"Access Token: {request.session['session']}")
      
      logger.info(f"Request Headers: {request.headers}")
 
@@ -236,7 +281,6 @@ async def auth_response(request: Request):
      if cache.has_state_changed:
          msal_app.token_cache = cache
 
-     #return RedirectResponse(url=f"https://{request.url.hostname}/")  # Redirect to index page after login
      return RedirectResponse(url="/")  # Redirect to backend page after login
  except Exception as e: # Handle exceptions
      logging.exception("Error in auth_response:" + str(e)) # Log the exception
@@ -247,7 +291,6 @@ async def auth_response(request: Request):
 async def logout(request: Request):
     request.session.pop("user", None)  # Clear user from session
     request.session.clear()  # Clear the session
-    #return RedirectResponse(url=f"https://{request.url.hostname}/login")
     return RedirectResponse(url=f"/login")
 
 # Conversation History
@@ -257,49 +300,6 @@ max_tokens_in_conversation = 10 # To be implemented
 max_conversations_to_consider = 10
 
 # --- Main Application Routes ---
-
-#http://localhost:8000/maf/ticket_id
-# @app.get("/maf/{ticketNumber}", response_class=HTMLResponse)
-# async def maf_index(request: Request, ticketNumber: str):
-#     user = getSessionUser(request)
-#     if user:
-#         model_output = run_conversation(ticketNumber)
-
-#         message = {"gpt_id" : "67406e4c3c9ee64a13c74f83",
-#                     "gpt_name" : "plain_gpt3_5_turbo",
-#                     "role": "assistant",
-#                     "content": model_output
-#         }
-
-#         logger.info(f"Message: {message}")
-#         logger.info(f"model_output: {model_output}")
-
-#         if "No conversation found for the given ticket number. Please try again with a valid ticket" not in message["content"]:
-#             ticketSummary = json.loads(message["content"])
-#             isErrorResponse = False
-#         else:
-#             ticketSummary = message["content"]
-#             isErrorResponse = True
-
-#         response = templates.TemplateResponse("summary.html", {
-#             "request": request, 
-#             "ticketSummary": ticketSummary,
-#             "ticketId" : ticketNumber,
-#             "ticket_conversation": get_conversation(ticketNumber),
-#             "user": user,
-#             "isErrorResponse": isErrorResponse,
-#             "config": CONFIG  # Pass the CONFIG dictionary
-#         })
-
-#         response.set_cookie(key="loggedUser", value=user["name"], max_age=1800)  # expires in 30 minutes
-#     else:
-#         response = RedirectResponse(url="/login")
-    
-#     return response
-
-def getSessionUser(request:Request):
-    #return getSessionUser(request)
-    return "Dharmeshwaran S"
 
 #http://localhost:8000/maf/?TID=ticket_id
 @app.get("/maf/", response_class=HTMLResponse)
@@ -336,26 +336,10 @@ async def maf_index_1(request: Request, TID: str):
 
         response.set_cookie(key="loggedUser", value=getSessionUser(request), max_age=1800)  # expires in 30 minutes
     else:
-       # response = RedirectResponse(url="/login")
         response = RedirectResponse(url="/")
     
     return response
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    user = getSessionUser(request)
-    if user:
-        response = templates.TemplateResponse("index.html", {
-            "request": request, 
-            "user": user,
-            "config": CONFIG  # Pass the CONFIG dictionary
-        })
-        response.set_cookie(key="loggedUser", value=getSessionUser(request), max_age=1800)  # expires in 30 minutes
-    else:
-        #response = RedirectResponse(url="/login")
-        response = RedirectResponse(url="/")
-    
-    return response
 
 @app.get('/favicon.ico')
 async def favicon():
@@ -363,43 +347,11 @@ async def favicon():
     file_path = './static/' + file_name
     return FileResponse(path=file_path, headers={'mimetype': 'image/vnd.microsoft.icon'})
 
-
-    
-# @app.get("/userProfile")
-# async def getUserProfile(request: Request):
-#  try:
-#      accounts = msal_app.get_accounts()
-#      if accounts:
-#          token = msal_app.acquire_token_silent(
-#              CONFIG["SCOPE"],
-#              account=accounts[0],  # Use the first logged-in account
-#          )
-#      else:
-#          # If no accounts are found, redirect to login
-#          return RedirectResponse(url="/login")
-
-#      if "error" in token: # Handle error
-#          logging.error(f"Error acquiring token silently: {token.get('error')}, {token.get('error_description')}")  # Log details
-#          # You might want to handle different error types specifically, like interaction_required
-#          return RedirectResponse(url="/login")
-
-#      api_result = requests.get(
-#          CONFIG["ENDPOINT"],
-#          headers={"Authorization": "Bearer " + token["access_token"]},
-#          timeout=30,
-#      ).json()
-     
-#      return templates.TemplateResponse("display.html", {"request": request, "data": api_result})
-
-#  except Exception as e:  # Handle broader exceptions
-#      logging.exception(f"Error in call_downstream_api: {str(e)}")
-#      return templates.TemplateResponse("auth_error.html", {"request": request, "error": str(e)})  # Render a general error page
-
 def getDeployments():
 
     deployed_model_names = []
 
-     # Replace with your subscription ID
+    # Replace with your subscription ID
     subscription_id = os.getenv("SUBSCRIPTION_ID")
     resource_group = os.getenv("RESOURCE_GROUP_NAME")
     openai_account = os.getenv("OPENAI_ACCOUNT_NAME")
@@ -416,49 +368,13 @@ def getDeployments():
     for deployment in deployments:
         logger.info(f"Deployment Name: {deployment.name}")
         deployed_model_names.append(deployment.name)
-        #print(f"Deployment {deployment.as_dict()}")
 
     return deployed_model_names
 
-# MSAL Authentication: Acquire token for Azure Management API
-# def get_access_token(msal_app):
-#     # Acquire token for Azure Management API (scopes)
-#     result = msal_app.acquire_token_for_client(scopes=["https://management.azure.com/.default"])
-    
-#     if "access_token" in result:
-#         logger.info("Successfully acquired access token.")
-#         return result["access_token"]
-#     else:
-#         logger.error("Failed to acquire access token.")
-#         raise Exception("Authentication failed: " + result.get("error_description", "Unknown error"))
+def getSessionUser(request:Request):
+    return "Dharmeshwaran S"
 
-
-
-# def print_session_values(request: Request, callee: str):
-#     session = request.session
-    
-#     logger.info(f"Calling Method : {callee}. Session Information:\n")
-#     for key, value in session.items():
-#         logger.info(f"{key}: {value}\n")
-
-#     session = request.session.get("session")
-#     logger.info("session_cookie Information:\n")
-#     if session != None:
-#         for key, value in session.items():
-#             logger.info(f"{key}: {value}\n")
-
-#     session = request.session.get("_session")
-#     logger.info("_session Information:\n")
-#     if session != None:
-#         for key, value in session.items():
-#             logger.info(f"{key}: {value}\n")
-
-
-
-# if __name__ == "__main__":
-#    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 
 if __name__ == "__main__":
-    #getDeployments()
     port = int(os.getenv("PORT", 8000))  # Use the environment variable or default to 8000
     uvicorn.run(app, host="localhost", port=port)
