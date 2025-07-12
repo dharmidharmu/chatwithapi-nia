@@ -6,7 +6,7 @@ variables:
   resourceGroup: 'rggptapp'
   serviceConnection: 'Devops-SP'
   pythonVersion: '3.11'
-  packageDir: '$(Build.ArtifactStagingDirectory)'
+  zipName: 'fastapi-app.zip'
 
 stages:
   - stage: Build
@@ -29,25 +29,6 @@ stages:
               call venv\Scripts\activate
               pip install -r requirements.txt
             displayName: 'Install Python Dependencies'
-
-          # Node setup
-          - task: NodeTool@0
-            inputs:
-              versionSpec: '18.x'
-            displayName: 'Use Node.js'
-
-          - script: |
-              cd $(reactFolder)
-              npm install
-              npm run build
-            displayName: 'Build React Frontend'
-
-          # Copy React build to FastAPI static folder
-          - script: |
-              rmdir /S /Q $(staticFolder)
-              mkdir $(staticFolder)
-              xcopy /E /I /Y "$(reactFolder)\dist\*" "$(staticFolder)\"
-            displayName: 'Copy React Build to Static Folder'
 
           # Zip the entire app
           - powershell: |
