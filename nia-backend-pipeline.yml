@@ -1,0 +1,28 @@
+trigger: none
+pr: none
+
+variables:
+  pythonVersion: '3.11'  # Change if needed
+
+stages:
+  - stage: Setup
+    displayName: 'Setup Python Environment'
+    jobs:
+      - job: SetupJob
+        displayName: 'Install Dependencies'
+        pool:
+          vmImage: 'windows-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+              addToPath: true
+            displayName: 'Use Python $(pythonVersion)'
+
+          - script: |
+              python -m venv env
+              call env\Scripts\activate
+              pip install --upgrade pip
+              pip install -r requirements.txt
+            displayName: 'Create venv and Install Requirements'
+            workingDirectory: '$(Build.SourcesDirectory)'
