@@ -7,6 +7,7 @@ variables:
   serviceConnection: 'Devops-SP'
   pythonVersion: '3.11'
   zipName: 'fastapi-app.zip'
+  unzipPath: 'unzipped-app'
 
 stages:
   - stage: Build
@@ -57,10 +58,14 @@ stages:
           - download: current
             artifact: fastapi-zipped
 
+          - powershell: |
+              Expand-Archive -Path "$(Pipeline.Workspace)\fastapi-zipped\$(zipName)" -DestinationPath "$(Pipeline.Workspace)\$(unzipPath)" -Force
+            displayName: 'Unzip Artifact to Folder'
+
           - task: AzureWebApp@1
             inputs:
               azureSubscription: '$(serviceConnection)'
               appType: 'webAppLinux'
               appName: '$(appName)'
-              package: '$(Pipeline.Workspace)/fastapi-zipped/$(zipName)'
-            displayName: 'Deploy FastAPI App via Zip'
+              package: '$(Pipeline.Workspace)\$(unzipPath)'
+            displayName: 'Deploy Unzipped Folder to Azure'
